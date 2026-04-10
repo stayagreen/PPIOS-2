@@ -1,0 +1,5 @@
+{
+  "name": "PPIOS 产品管理系统",
+  "description": "基于 Node.js 和 SQLite 的产品管理系统，支持产品录入、图片上传、Excel 导出等功能。",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>PPIOS 产品管理系统</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f5}
+    
+    /* 登录页 */
+    .page{position:fixed;top:0;left:0;right:0;bottom:0;display:none;justify-content:center;align-items:center;background:#f5f5f5}
+    .page.active{display:flex}
+    .login-box{background:white;padding:40px;border-radius:8px;width:340px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}
+    .login-box h1{text-align:center;margin-bottom:30px;color:#333}
+    .login-error{color:#f5222d;margin-bottom:15px;font-size:14px}
+    
+    /* 表单 */
+    .form-group{margin-bottom:18px}
+    .form-group label{display:block;margin-bottom:8px;color:#666;font-size:14px}
+    .form-group input,.form-group select,.form-group textarea{width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px}
+    .form-group textarea{min-height:60px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+    
+    /* 按钮 */
+    .btn{padding:10px 20px;border:none;border-radius:4px;font-size:14px;cursor:pointer}
+    .btn-primary{background:#1890ff;color:white}
+    .btn-secondary{background:#666;color:white}
+    .btn-danger{background:#f5222d;color:white}
+    .btn-sm{padding:6px 12px;font-size:12px}
+    .btn-full{width:100%}
+    
+    /* 头部 */
+    .header{background:white;padding:15px 20px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,0.06)}
+    .header h1{font-size:18px}
+    .header-actions{display:flex;gap:12px;align-items:center}
+    
+    /* 主体 */
+    .main{padding:20px;max-width:1200px;margin:0 auto}
+    .toolbar{margin-bottom:20px;display:flex;justify-content:space-between}
+    .toolbar-left{display:flex;gap:12px}
+    .search-input{padding:8px 12px;border:1px solid #ddd;border-radius:4px;width:200px}
+    
+    /* 表格 */
+    .table-wrap{background:white;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06)}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:12px 15px;text-align:left;border-bottom:1px solid #f0f0f0;font-size:13px}
+    th{background:#fafafa;font-weight:600;color:#333}
+    td{color:#666}
+    .table-img{width:50px;height:50px;object-fit:cover;border-radius:4px;cursor:pointer}
+    .table-actions{display:flex;gap:8px}
+    
+    /* 弹窗 */
+    .modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:none;justify-content:center;align-items:center;z-index:1000}
+    .modal.active{display:flex}
+    .modal-content{background:white;padding:25px;border-radius:8px;width:90%;max-width:600px;max-height:90vh;overflow-y:auto}
+    .modal-title{font-size:18px;margin-bottom:20px}
+    .modal-actions{text-align:right;margin-top:20px;display:flex;gap:10px;justify-content:flex-end}
+    
+    /* 图片上传 */
+    .img-upload{border:2px dashed #ddd;border-radius:8px;padding:20px;text-align:center;cursor:pointer;color:#999}
+    .img-upload:hover{border-color:#1890ff}
+    .img-preview{max-width:150px;max-height:150px;border-radius:4px}
+    .img-preview-wrap{text-align:center;margin-top:10px}
+    .img-preview-wrap img{border:1px solid #ddd;border-radius:4px;max-width:120px;max-height:120px}
+  </style>
+</head>
+<body>
+  <!-- 登录页 -->
+  <div class="page active" id="loginPage">
+    <div class="login-box">
+      <h1>PPIOS 产品管理系统</h1>
+      <div class="login-error" id="loginError"></div>
+      <div class="form-group"><input id="username" placeholder="用户名"></div>
+      <div class="form-group"><input id="password" type="password" placeholder="密码"></div>
+      <button class="btn btn-primary btn-full" onclick="doLogin()">登录</button>
+      <div style="margin-top:15px;text-align:center"><a href="#" onclick="showRegister()" style="color:#1890ff">注册新用户</a></div>
+    </div>
+  </div>
+
+  <!-- 主页面 -->
+  <div id="mainPage">
+    <div class="header">
+      <h1>PPIOS 产品管理系统</h1>
+      <div class="header-actions">
+        <span id="userInfo"></span>
+        <button class="btn btn-secondary btn-sm" onclick="showSettings()">设置</button>
+        <button class="btn btn-secondary btn-sm" onclick="doLogout()">退出</button>
+      </div>
+    </div>
+    <div class="main">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input type="text" class="search-input" id="searchInput" placeholder="搜索产品型号" onkeyup="doSearch()">
+          <button class="btn btn-primary" onclick="showAdd()">新增产品</button>
+        </div>
+        <button class="btn btn-secondary" onclick="doExport()">导出Excel</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:50">ID</th>
+              <th style="width:50">主图</th>
+              <th style="width:50">尺寸图</th>
+              <th>产品型号</th>
+              <th>规格</th>
+              <th>尺寸</th>
+              <th>净重(kg)</th>
+              <th>含包装(kg)</th>
+              <th>出厂价(元)</th>
+              <th>零售价(元)</th>
+              <th>光源规格</th>
+              <th>光源数量</th>
+              <th>创建人</th>
+              <th>创建时间</th>
+              <th style="width:100">操作</th>
+            </tr>
+          </thead>
+          <tbody id="productTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 产品弹窗 -->
+  <div class="modal" id="productModal">
+    <div class="modal-content">
+      <div class="modal-title" id="modalTitle">新增产品</div>
+      <input type="hidden" id="productId">
+      <div class="row">
+        <div class="form-group"><label>产品型号 *</label><input id="productModel"></div>
+        <div class="form-group"><label>产品规格</label><input id="productSpec"></div>
+      </div>
+      <div class="row">
+        <div class="form-group"><label>产品尺寸</label><input id="productSize"></div>
+        <div class="form-group"><label>产品净重(kg)</label><input id="productNetWeight" type="number" step="0.01"></div>
+      </div>
+      <div class="row">
+        <div class="form-group"><label>含包装重量(kg)</label><input id="productPackagedWeight" type="number" step="0.01"></div>
+        <div class="row">
+        <div class="form-group"><label>含光源出厂价(元)</label><input id="productFactoryPrice" type="number" step="0.01"></div>
+        <div class="form-group"><label>建议零售价(元)</label><input id="productRetailPrice" type="number" step="0.01"></div>
+      </div>
+      <div class="row">
+        <div class="form-group"><label>光源规格</label><input id="productLightSpec"></div>
+        <div class="form-group"><label>光源数量</label><input id="productLightCount" type="number"></div>
+      </div>
+      <div class="form-group"><label>产品图册目录(文件夹路径)</label><input id="productCatalog" placeholder="例如: D:\images\product001"></div>
+      <div class="form-group"><label>备注</label><textarea id="productRemark"></textarea></div>
+      <div class="row">
+        <div class="form-group">
+          <label>主图</label>
+          <input type="file" id="mainImage" accept="image/*" style="display:none" onchange="doUpload(this,'main')">
+          <div class="img-upload" id="mainImageUpload" onclick="document.getElementById('mainImage').click()">点击上传主图</div>
+          <div class="img-preview-wrap" id="mainImagePreview" style="display:none">
+            <img id="mainImageImg" class="img-preview" onclick="viewImage(this.src)">
+            <button class="btn btn-danger btn-sm" onclick="removeImage('main')">删除</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>尺寸图</label>
+          <input type="file" id="sizeImage" accept="image/*" style="display:none" onchange="doUpload(this,'size')">
+          <div class="img-upload" id="sizeImageUpload" onclick="document.getElementById('sizeImage').click()">点击上传尺寸图</div>
+          <div class="img-preview-wrap" id="sizeImagePreview" style="display:none">
+            <img id="sizeImageImg" class="img-preview" onclick="viewImage(this.src)">
+            <button class="btn btn-danger btn-sm" onclick="removeImage('size')">删除</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal('productModal')">取消</button>
+        <button class="btn btn-primary" onclick="doSave()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设置弹窗 -->
+  <div class="modal" id="settingsModal">
+    <div class="modal-content">
+      <div class="modal-title">系统设置</div>
+      <div class="form-group"><label>产品型号前缀</label><input id="settingPrefix" placeholder="例如: PPIOS"></div>
+      <div class="form-group"><label>起始编号</label><input id="settingStart" type="number" placeholder="例如: 1001"></div>
+      <hr style="margin:20px 0">
+      <div class="form-group"><label>原密码</label><input id="oldPassword" type="password"></div>
+      <div class="form-group"><label>新密码</label><input id="newPassword" type="password"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="changePassword()">修改密码</button>
+        <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+        <button class="btn btn-secondary" onclick="closeModal('settingsModal')">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 注册弹窗 -->
+  <div class="modal" id="registerModal">
+    <div class="modal-content">
+      <div class="modal-title">注册用户</div>
+      <div class="form-group"><label>用户名</label><input id="regUsername"></div>
+      <div class="form-group"><label>密码</label><input id="regPassword" type="password"></div>
+      <div class="form-group"><label>角色</label><select id="regRole"><option value="operator">操作员</option><option value="admin">管理员</option></select></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal('registerModal')">取消</button>
+        <button class="btn btn-primary" onclick="doRegister()">注册</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 图片查看弹窗 -->
+  <div class="modal active" id="imageModal" onclick="this.style.display='none'" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:9999">
+    <img id="viewImage" style="max-width:90%;max-height:90%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">
+  </div>
+
+<script>
+var API = "/api";
+var UPLOAD = "";
+var token = localStorage.getItem("token");
+var user = localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user")) : null;
+var allProducts = [];
+var currentMainImage = "";
+var currentSizeImage = "";
+var currentSizeImage = "";
+
+function $(id) { return document.getElementById(id); }
+
+// 初始化
+if (token && user) {
+  document.getElementById("loginPage").style.display = "none";
+  $("mainPage").style.display = "block";
+  $("userInfo").innerText = user.username + "(" + (user.role === "admin" ? "管理员" : "操作员") + ")";
+  loadProducts();
+}
+
+// 登录
+function doLogin() {
+  var x = new XMLHttpRequest();
+  x.open("POST", API + "/login", true);
+  x.setRequestHeader("Content-Type", "application/json");
+  x.onload = function() {
+    if (x.status === 200) {
+      var d = JSON.parse(x.responseText);
+      localStorage.setItem("token", d.token);
+      localStorage.setItem("user", JSON.stringify(d.user));
+      user = d.user;
+      token = d.token;
+      location.reload();
+    } else {
+      $("loginError").innerText = JSON.parse(x.responseText).error;
+    }
+  };
+  x.send(JSON.stringify({username: $("username").value, password: $("password").value}));
+}
+
+// 退出
+function doLogout() {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  location.reload();
+}
+
+// 注册
+function showRegister() {
+  document.getElementById("registerModal").style.display = "flex";
+}
+
+function doRegister() {
+  var x = new XMLHttpRequest();
+  x.open("POST", API + "/register", true);
+  x.setRequestHeader("Content-Type", "application/json");
+  x.onload = function() {
+    if (x.status === 200) {
+      alert("注册成功，请登录");
+      closeModal("registerModal");
+    } else {
+      alert(JSON.parse(x.responseText).error);
+    }
+  };
+  x.send(JSON.stringify({
+    username: $("regUsername").value,
+    password: $("regPassword").value,
+    role: $("regRole").value
+  }));
+}
+
+// 加载产品
+function loadProducts() {
+  var x = new XMLHttpRequest();
+  x.open("GET", API + "/products", true);
+  x.setRequestHeader("Authorization", "Bearer " + token);
+  x.onload = function() {
+    if (x.status === 200) {
+      allProducts = JSON.parse(x.responseText);
+      renderProducts(allProducts);
+    }
+  };
+  x.send();
+}
+
+// 渲染产品
+function renderProducts(list) {
+  var html = "";
+  for (var i = 0; i < list.length; i++) {
+    var p = list[i];
+    var imgUrl = p.main_image ? UPLOAD + p.main_image : "";
+    var sizeUrl = p.size_image ? UPLOAD + p.size_image : "";
+    var mainImg = p.main_image ? '<img src="' + imgUrl + '" class="table-img" id="img_' + p.id + '_1">' : "-";
+    var sizeImg = p.size_image ? '<img src="' + sizeUrl + '" class="table-img" id="img_' + p.id + '_2">' : "-";
+    var created = p.created_at ? p.created_at.split("T")[0] : "-";
+    html += "<tr>" +
+      "<td>" + p.id + "</td>" +
+      "<td>" + mainImg + "</td>" +
+      "<td>" + sizeImg + "</td>" +
+      "<td>" + p.model + "</td>" +
+      "<td>" + (p.spec || "-") + "</td>" +
+      "<td>" + (p.size || "-") + "</td>" +
+      "<td>" + (p.net_weight || "-") + "</td>" +
+      "<td>" + (p.packaged_weight || "-") + "</td>" +
+      "<td>" + (p.factory_price || "-") + "</td>" +
+      "<td>" + (p.retail_price || "-") + "</td>" +
+      "<td>" + (p.light_source_spec || "-") + "</td>" +
+      "<td>" + (p.light_source_count || "-") + "</td>" +
+      "<td>" + p.creator_name + "</td>" +
+      "<td>" + created + "</td>" +
+      "<td class='table-actions'><button class='btn btn-secondary btn-sm' onclick='showEdit(" + p.id + ")'>编辑</button>" +
+      (user.role === "admin" || user.id === p.created_by ? "<button class='btn btn-danger btn-sm' onclick='doDelete(" + p.id + ")'>删除</button>" : "") +
+      "</td></tr>";
+  }
+  $("productTable").innerHTML = html || "<tr><td colspan='15' style='text-align:center;color:#999'>暂无数据</td></tr>";
+  
+  // 绑定图片点击事件
+  setTimeout(function() {
+    var rows = document.getElementById("productTable").querySelectorAll("tr");
+    for (var ri = 0; ri < rows.length; ri++) {
+      var cells = rows[ri].querySelectorAll("td");
+      if (cells.length >= 3) {
+        var mainTd = cells[1];
+        var sizeTd = cells[2];
+        var mainImgEl = mainTd.querySelector("img");
+        var sizeImgEl = sizeTd.querySelector("img");
+        if (mainImgEl) {
+          mainImgEl.onclick = function(e) { e.stopPropagation(); viewImage(this.src); };
+        }
+        if (sizeImgEl) {
+          sizeImgEl.onclick = function(e) { e.stopPropagation(); viewImage(this.src); };
+        }
+      }
+    }
+  }, 100);
+}
+
+// 搜索
+function doSearch() {
+  var kw = $("searchInput").value.toLowerCase();
+  var filtered = allProducts.filter(function(p) { return !kw || p.model.toLowerCase().includes(kw); });
+  renderProducts(filtered);
+}
+
+// 新增产品
+function showAdd() {
+  $("modalTitle").innerText = "新增产品";
+  $("productId").value = "";
+  clearForm();
+  currentMainImage = "";
+  
+  var x = new XMLHttpRequest();
+  x.open("GET", API + "/model/generate", true);
+  x.setRequestHeader("Authorization", "Bearer " + token);
+  x.onload = function() {
+    if (x.status === 200) {
+      $("productModel").value = JSON.parse(x.responseText).model;
+    }
+  };
+  x.send();
+  
+  document.getElementById("productModal").style.display = "flex";
+}
+
+// 编辑产品
+function showEdit(id) {
+  var p = allProducts.find(function(o) { return o.id === id; });
+  if (!p) return;
+  
+  $("modalTitle").innerText = "编辑产品";
+  $("productId").value = p.id;
+  $("productModel").value = p.model;
+  $("productSpec").value = p.spec || "";
+  $("productSize").value = p.size || "";
+  $("productNetWeight").value = p.net_weight || "";
+  $("productPackagedWeight").value = p.packaged_weight || "";
+  $("productFactoryPrice").value = p.factory_price || "";
+  $("productRetailPrice").value = p.retail_price || "";
+  $("productLightSpec").value = p.light_source_spec || "";
+  $("productLightCount").value = p.light_source_count || "";
+  $("productCatalog").value = p.catalog_path || "";
+  $("productRemark").value = p.remark || "";
+  
+  currentMainImage = p.main_image || "";
+  if (p.main_image) {
+    $("mainImagePreview").style.display = "block";
+    $("mainImageImg").src = UPLOAD + p.main_image;
+    $("mainImageUpload").style.display = "none";
+  } else {
+    $("mainImagePreview").style.display = "none";
+    $("mainImageUpload").style.display = "block";
+  }
+  
+  currentSizeImage = p.size_image || "";
+  if (p.size_image) {
+    $("sizeImagePreview").style.display = "block";
+    $("sizeImageImg").src = UPLOAD + p.size_image;
+    $("sizeImageUpload").style.display = "none";
+  } else {
+    $("sizeImagePreview").style.display = "none";
+    $("sizeImageUpload").style.display = "block";
+  }
+  
+  document.getElementById("productModal").style.display = "flex";
+}
+
+function clearForm() {
+  $("productSpec").value = "";
+  $("productSize").value = "";
+  $("productNetWeight").value = "";
+  $("productPackagedWeight").value = "";
+  $("productFactoryPrice").value = "";
+  $("productRetailPrice").value = "";
+  $("productLightSpec").value = "";
+  $("productLightCount").value = "";
+  $("productCatalog").value = "";
+  $("productRemark").value = "";
+  $("mainImagePreview").style.display = "none";
+  $("mainImageUpload").style.display = "block";
+  $("sizeImagePreview").style.display = "none";
+  $("sizeImageUpload").style.display = "block";
+}
+
+// 保存产品
+function doSave() {
+  var id = $("productId").value;
+  var data = {
+    model: $("productModel").value,
+    spec: $("productSpec").value,
+    size: $("productSize").value,
+    net_weight: parseFloat($("productNetWeight").value) || null,
+    packaged_weight: parseFloat($("productPackagedWeight").value) || null,
+    factory_price: parseFloat($("productFactoryPrice").value) || null,
+    retail_price: parseFloat($("productRetailPrice").value) || null,
+    light_source_spec: $("productLightSpec").value,
+    light_source_count: parseInt($("productLightCount").value) || null,
+    catalog_path: $("productCatalog").value,
+    remark: $("productRemark").value,
+    main_image: currentMainImage,
+    size_image: currentSizeImage
+  };
+  
+  var x = new XMLHttpRequest();
+  x.open(id ? "PUT" : "POST", API + "/products" + (id ? "/" + id : ""), true);
+  x.setRequestHeader("Content-Type", "application/json");
+  x.setRequestHeader("Authorization", "Bearer " + token);
+  x.onload = function() {
+    if (x.status === 200 || x.status === 201) {
+      closeModal("productModal");
+      loadProducts();
+    } else {
+      alert(JSON.parse(x.responseText).error);
+    }
+  };
+  x.send(JSON.stringify(data));
+}
+
+// 删除产品
+function doDelete(id) {
+  if (!confirm("确定要删除这个产品吗？")) return;
+  var x = new XMLHttpRequest();
+  x.open("DELETE", API + "/products/" + id, true);
+  x.setRequestHeader("Authorization", "Bearer " + token);
+  x.onload = function() {
+    loadProducts();
+  };
+  x.send();
+}
+
+// 上传图片
+function doUpload(input, type) {
+  if (!input.files[0]) return;
+  var formData = new FormData();
+  formData.append("image", input.files[0]);
+  
+  var x = new XMLHttpRequest();
+  x.open("POST", API + "/upload", true);
+  x.setRequestHeader("Authorization", "Bearer " + token);
+  x.onload = function() {
+    if (x.status === 200) {
+      var url = JSON.parse(x.responseText).url;
+      if (type === "main") {
+        currentMainImage = url;
+        $("mainImagePreview").style.display = "block";
+        $("mainImageImg").src = UPLOAD + url;
+        $("mainImageUpload").style.display = "none";
+      } else if (type === "size") {
+        currentSizeImage = url;
+        $("sizeImagePreview").style.display = "block";
+        $("sizeImageImg").src = UPLOAD + url;
+        $("sizeImageUpload").style.display = "none";
+      }
+    }
+  };
+  x.send(formData);
+}
+
+function removeImage(type) {
+  if (type === "main") {
+    currentMainImage = "";
+    $("mainImagePreview").style.display = "none";
+    $("mainImageUpload").style.display = "block";
+    $("mainImage").value = "";
+  } else if (type === "size") {
+    currentSizeImage = "";
+    $("sizeImagePreview").style.display = "none";
+    $("sizeImageUpload").style.display = "block";
+    $("sizeImage").value = "";
+  }
+}
+
+// 查看图片
+function viewImage(src) {
+  var modal = document.getElementById("imageModal");
+  var img = document.getElementById("viewImage");
+  img.src = src;
+  modal.style.display = "flex";
+}
+
+// 导出Excel
+function doExport() {
+  var x = new XMLHttpRequest();
+  x.open("GET", API + "/export", true);
+  x.setRequestHeader("Authorization", "Bearer " + token);
+  x.onload = function() {
+    var blob = x.response;
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "products.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  x.responseType = "blob";
+  x.send();
+}
+
+// 设置
+function showSettings() {
+  var x = new XMLHttpRequest();
+  x.open("GET", API + "/settings", true);
+  x.setRequestHeader("Authorization", "Bearer " + token);
+  x.onload = function() {
+    if (x.status === 200) {
+      var s = JSON.parse(x.responseText);
+      $("settingPrefix").value = s.model_prefix || "";
+      $("settingStart").value = s.model_start_number || "";
+    }
+  };
+  x.send();
+  document.getElementById("settingsModal").style.display = "flex";
+}
+
+function saveSettings() {
+  var x = new XMLHttpRequest();
+  x.open("PUT", API + "/settings", true);
+  x.setRequestHeader("Content-Type", "application/json");
+  x.setRequestHeader("Authorization", "Bearer " + token);
+  x.onload = function() {
+    if (x.status === 200) {
+      alert("设置已保存");
+      closeModal("settingsModal");
+    }
+  };
+  x.send(JSON.stringify({
+    model_prefix: $("settingPrefix").value,
+    model_start_number: $("settingStart").value
+  }));
+}
+
+function changePassword() {
+  var x = new XMLHttpRequest();
+  x.open("PUT", API + "/user/password", true);
+  x.setRequestHeader("Content-Type", "application/json");
+  x.setRequestHeader("Authorization", "Bearer " + token);
+  x.onload = function() {
+    if (x.status === 200) {
+      alert("密码已修改，请重新登录");
+      doLogout();
+    } else {
+      alert(JSON.parse(x.responseText).error);
+    }
+  };
+  x.send(JSON.stringify({
+    oldPassword: $("oldPassword").value,
+    newPassword: $("newPassword").value
+  }));
+}
+
+// 关闭弹窗
+function closeModal(id) {
+  document.getElementById(id).style.display = "none";
+}
+</script>
+</body>
+</html>
