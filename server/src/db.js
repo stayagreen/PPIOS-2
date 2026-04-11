@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import bcrypt from "bcryptjs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
@@ -78,6 +79,13 @@ const defaultSettings = {
 };
 for (const [key, value] of Object.entries(defaultSettings)) {
   db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run(key, value);
+}
+
+// Initialize default admin
+const adminExists = db.prepare("SELECT id FROM users WHERE username = 'admin'").get();
+if (!adminExists) {
+  const hashed = bcrypt.hashSync("admin", 10);
+  db.prepare("INSERT INTO users (username, password, role) VALUES (?, ?, ?)").run("admin", hashed, "admin");
 }
 
 export default db;

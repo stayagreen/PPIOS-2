@@ -290,7 +290,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       )}
 
       {isSettingsModalOpen && (
-        <SettingsModal onClose={() => setIsSettingsModalOpen(false)} />
+        <SettingsModal user={user} onClose={() => setIsSettingsModalOpen(false)} />
       )}
 
       {/* Image Preview Modal */}

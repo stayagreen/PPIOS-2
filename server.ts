@@ -48,12 +48,34 @@ async function startServer() {
   }
 
   // API Routes
-  app.post("/api/register", (req, res) => {
+  app.get("/api/users", authMiddleware, (req: any, res) => {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "权限不足" });
+    }
+    const users = db.prepare("SELECT id, username, role, created_at FROM users").all();
+    res.json(users);
+  });
+
+  app.post("/api/users", authMiddleware, (req: any, res) => {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "权限不足" });
+    }
     const { username, password, role } = req.body;
     if (!username || !password) return res.status(400).json({ error: "缺少参数" });
     const user = auth.register(username, password, role);
     if (!user) return res.status(400).json({ error: "用户名已存在" });
     res.json(user);
+  });
+
+  app.delete("/api/users/:id", authMiddleware, (req: any, res) => {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "权限不足" });
+    }
+    if (req.params.id === req.user.id.toString()) {
+      return res.status(400).json({ error: "不能删除自己" });
+    }
+    db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
   });
 
   app.post("/api/login", (req, res) => {
