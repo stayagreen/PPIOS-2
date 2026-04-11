@@ -75,8 +75,15 @@ async function startServer() {
     if (req.params.id === req.user.id.toString()) {
       return res.status(400).json({ error: "不能删除自己" });
     }
-    db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
-    res.json({ success: true });
+    try {
+      db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) {
+      if (e.code === "SQLITE_CONSTRAINT_FOREIGNKEY") {
+        return res.status(400).json({ error: "该用户已创建产品，无法删除。请先删除或转移该用户创建的产品。" });
+      }
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.put("/api/users/:id", authMiddleware, (req: any, res) => {

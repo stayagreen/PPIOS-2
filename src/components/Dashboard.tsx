@@ -81,17 +81,21 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
   const openDirectory = (path: string) => {
     if (!path) return;
-    // Try to open file protocol
-    // Note: Most browsers block this for security. 
-    // We provide a fallback to copy the path.
-    try {
-      const win = window.open(`file:///${path.replace(/\\/g, '/')}`, '_blank');
-      if (!win) {
-        throw new Error('Blocked');
-      }
-    } catch (e) {
+    
+    const copyPath = () => {
       navigator.clipboard.writeText(path);
       showNotification('由于浏览器安全限制无法直接打开，路径已复制到剪贴板，请在资源管理器中粘贴打开', 'success');
+    };
+
+    // Try to open file protocol
+    // Note: Most browsers block this for security. 
+    try {
+      const win = window.open(`file:///${path.replace(/\\/g, '/')}`, '_blank');
+      if (!win || win.closed || typeof win.closed === 'undefined') {
+        copyPath();
+      }
+    } catch (e) {
+      copyPath();
     }
   };
 

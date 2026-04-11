@@ -71,7 +71,11 @@ export function createProduct(data, userId) {
 
     if (suppliers && suppliers.length > 0) {
       const supplierStmt = db.prepare("INSERT INTO product_suppliers (product_id, supplier_id, factory_model) VALUES (?, ?, ?)");
+      const checkSupplierStmt = db.prepare("SELECT id FROM suppliers WHERE id = ?");
       for (const s of suppliers) {
+        if (!checkSupplierStmt.get(s.id)) {
+          throw new Error(`供应商 ID ${s.id} 不存在`);
+        }
         supplierStmt.run(productId, s.id, s.factory_model || null);
       }
     }
@@ -141,7 +145,11 @@ export function updateProduct(id, data, userId, role) {
     db.prepare("DELETE FROM product_suppliers WHERE product_id = ?").run(productId);
     if (suppliers && suppliers.length > 0) {
       const supplierStmt = db.prepare("INSERT INTO product_suppliers (product_id, supplier_id, factory_model) VALUES (?, ?, ?)");
+      const checkSupplierStmt = db.prepare("SELECT id FROM suppliers WHERE id = ?");
       for (const s of suppliers) {
+        if (!checkSupplierStmt.get(s.id)) {
+          throw new Error(`供应商 ID ${s.id} 不存在`);
+        }
         supplierStmt.run(productId, s.id, s.factory_model || null);
       }
     }

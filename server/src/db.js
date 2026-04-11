@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const db = new Database(join(__dirname, "..", "database.db"));
+db.exec("PRAGMA foreign_keys = ON;");
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -24,8 +25,8 @@ db.exec(`
     model TEXT NOT NULL,
     catalog_path TEXT,
     supplier_id INTEGER,
-    FOREIGN KEY (created_by) REFERENCES users(id),
-    FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL
   );
 
   CREATE TABLE IF NOT EXISTS suppliers (
@@ -92,11 +93,13 @@ if (!productColumnNames.includes("factory_model")) {
   db.exec("ALTER TABLE products ADD COLUMN factory_model TEXT");
 }
 
-// Migration: Migrate supplier_id to product_suppliers
+// Migration: Migrate supplier_id to product_suppliers and clear legacy column
 const productsWithSupplier = db.prepare("SELECT id, supplier_id FROM products WHERE supplier_id IS NOT NULL").all();
 const insertSupplierStmt = db.prepare("INSERT OR IGNORE INTO product_suppliers (product_id, supplier_id) VALUES (?, ?)");
+const clearSupplierStmt = db.prepare("UPDATE products SET supplier_id = NULL WHERE id = ?");
 for (const p of productsWithSupplier) {
   insertSupplierStmt.run(p.id, p.supplier_id);
+  clearSupplierStmt.run(p.id);
 }
 
 // Migration: Add other_images and other_files to product_skus if they don't exist

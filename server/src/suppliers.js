@@ -28,11 +28,13 @@ export function updateSupplier(id, data) {
 }
 
 export function deleteSupplier(id) {
-  // Check if supplier is used by any product
-  const used = db.prepare("SELECT id FROM products WHERE supplier_id = ? LIMIT 1").get(id);
-  if (used) {
-    throw new Error("该供应商已被产品使用，无法删除");
+  try {
+    db.prepare("DELETE FROM suppliers WHERE id = ?").run(id);
+    return true;
+  } catch (e) {
+    if (e.code === "SQLITE_CONSTRAINT_FOREIGNKEY") {
+      throw new Error("该供应商已被产品引用，无法删除。请先移除相关产品的供应商关联。");
+    }
+    throw e;
   }
-  db.prepare("DELETE FROM suppliers WHERE id = ?").run(id);
-  return true;
 }
