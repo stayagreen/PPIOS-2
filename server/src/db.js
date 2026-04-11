@@ -26,6 +26,7 @@ db.exec(`
     created_by INTEGER NOT NULL,
     model TEXT NOT NULL,
     catalog_path TEXT,
+    material TEXT,
     supplier_id INTEGER,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
     FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL
@@ -82,11 +83,14 @@ if (!productSupplierColumnNames.includes("factory_model")) {
   db.exec("ALTER TABLE product_suppliers ADD COLUMN factory_model TEXT");
 }
 
-// Migration: Add catalog_path to products if it doesn't exist
+// Migration: Add catalog_path and material to products if they don't exist
 const productColumns = db.prepare("PRAGMA table_info(products)").all();
 const productColumnNames = productColumns.map((c) => c.name);
 if (!productColumnNames.includes("catalog_path")) {
   db.exec("ALTER TABLE products ADD COLUMN catalog_path TEXT");
+}
+if (!productColumnNames.includes("material")) {
+  db.exec("ALTER TABLE products ADD COLUMN material TEXT");
 }
 if (!productColumnNames.includes("supplier_id")) {
   db.exec("ALTER TABLE products ADD COLUMN supplier_id INTEGER");
@@ -164,6 +168,7 @@ const defaultSettings = {
     columns: [
       { key: "id", header: "产品ID", enabled: true },
       { key: "model", header: "产品型号", enabled: true },
+      { key: "material", header: "材质", enabled: true },
       { key: "supplier_names", header: "供应商", enabled: true },
       { key: "spec", header: "规格名称", enabled: true },
       { key: "size", header: "尺寸", enabled: true },
@@ -190,14 +195,29 @@ for (const [key, value] of Object.entries(defaultSettings)) {
   db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run(key, value);
 }
 
-// Migration: Remove factory_model from existing export_template setting
+// Migration: Update existing export_template setting
 const exportTemplateSetting = db.prepare("SELECT value FROM settings WHERE key = 'export_template'").get();
 if (exportTemplateSetting) {
   try {
     const template = JSON.parse(exportTemplateSetting.value);
+    let modified = false;
+    
+    // Remove factory_model
     const originalCount = template.columns.length;
     template.columns = template.columns.filter((c) => c.key !== 'factory_model');
     if (template.columns.length !== originalCount) {
+      modified = true;
+    }
+
+    // Add material
+    if (!template.columns.find(c => c.key === 'material')) {
+      const modelIndex = template.columns.findIndex(c => c.key === 'model');
+      const insertIndex = modelIndex !== -1 ? modelIndex + 1 : 2;
+      template.columns.splice(insertIndex, 0, { key: "material", header: "材质", enabled: true });
+      modified = true;
+    }
+
+    if (modified) {
       db.prepare("UPDATE settings SET value = ? WHERE key = 'export_template'").run(JSON.stringify(template));
     }
   } catch (e) {

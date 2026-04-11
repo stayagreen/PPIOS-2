@@ -151,7 +151,7 @@ export async function exportProducts(ids = null, templateStr = null) {
     for (const sku of skus) {
       const rowData = {};
       for (const col of enabledColumns) {
-        if (col.key === "creator_name" || col.key === "created_at" || col.key === "model" || col.key === "id" || col.key === "supplier_names") {
+        if (["creator_name", "created_at", "model", "id", "supplier_names", "catalog_path", "material"].includes(col.key)) {
           rowData[col.key] = p[col.key];
         } else {
           rowData[col.key] = sku[col.key];

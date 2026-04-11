@@ -64,9 +64,9 @@ export function createProduct(data, userId) {
 
   const transaction = db.transaction((productData, skus, suppliers) => {
     const productStmt = db.prepare(`
-      INSERT INTO products (created_by, model, catalog_path) VALUES (?, ?, ?)
+      INSERT INTO products (created_by, model, catalog_path, material) VALUES (?, ?, ?, ?)
     `);
-    const result = productStmt.run(userId, productData.model, productData.catalog_path || null);
+    const result = productStmt.run(userId, productData.model, productData.catalog_path || null, productData.material || null);
     const productId = result.lastInsertRowid;
 
     if (suppliers && suppliers.length > 0) {
@@ -134,6 +134,10 @@ export function updateProduct(id, data, userId, role) {
     if (productData.hasOwnProperty('catalog_path')) {
       updateFields.push("catalog_path = ?");
       params.push(productData.catalog_path || null);
+    }
+    if (productData.hasOwnProperty('material')) {
+      updateFields.push("material = ?");
+      params.push(productData.material || null);
     }
     
     if (updateFields.length > 0) {

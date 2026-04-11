@@ -216,6 +216,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ID</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">图片</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">产品型号</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">材质</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">供应商</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">规格 / 尺寸</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">价格</th>
@@ -276,6 +277,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                             )}
                           </div>
                           <div className="text-xs text-slate-500">{sku.spec || '默认规格'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-slate-900">{p.material || '-'}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           {p.suppliers && p.suppliers.length > 0 ? (
@@ -533,6 +537,10 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">图册目录</p>
                   <p className="text-sm font-medium text-slate-900 truncate" title={viewingProduct.catalog_path}>{viewingProduct.catalog_path || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">材质</p>
+                  <p className="text-sm font-medium text-slate-900">{viewingProduct.material || '-'}</p>
                 </div>
               </div>
 

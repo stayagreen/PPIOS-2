@@ -26,6 +26,7 @@ const DEFAULT_TEMPLATE = {
   columns: [
     { key: "id", header: "产品ID", enabled: true },
     { key: "model", header: "产品型号", enabled: true },
+    { key: "material", header: "材质", enabled: true },
     { key: "supplier_names", header: "供应商", enabled: true },
     { key: "spec", header: "规格名称", enabled: true },
     { key: "size", header: "尺寸", enabled: true },

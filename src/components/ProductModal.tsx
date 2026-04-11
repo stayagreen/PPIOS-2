@@ -88,6 +88,7 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
   const [loading, setLoading] = useState(false);
   const [model, setModel] = useState('');
   const [catalogPath, setCatalogPath] = useState('');
+  const [material, setMaterial] = useState('');
   const [selectedSuppliers, setSelectedSuppliers] = useState<{ id: number, name: string, factory_model: string }[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
@@ -115,6 +116,7 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
     if (product) {
       setModel(product.model || '');
       setCatalogPath(product.catalog_path || '');
+      setMaterial(product.material || '');
       if (product.suppliers) {
         setSelectedSuppliers(product.suppliers.map((s: any) => ({
           id: s.id,
@@ -238,6 +240,7 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
       const payload = {
         model,
         catalog_path: catalogPath,
+        material,
         suppliers: selectedSuppliers.map(s => ({
           id: s.id,
           factory_model: s.factory_model
@@ -342,6 +345,15 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
                     </>
                   )}
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">产品材质</label>
+                <input 
+                  value={material} 
+                  onChange={e => setMaterial(e.target.value)} 
+                  placeholder="例如: 铁+铝+亚克力"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-sm" 
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">产品图册目录</label>
