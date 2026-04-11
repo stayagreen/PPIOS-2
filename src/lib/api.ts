@@ -31,9 +31,10 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   return response.json();
 }
 
-export async function exportExcel() {
+export async function exportExcel(ids?: number[]) {
   const token = localStorage.getItem('token');
-  const response = await fetch(`${API_BASE}/export`, {
+  const urlParams = ids && ids.length > 0 ? `?ids=${ids.join(',')}` : '';
+  const response = await fetch(`${API_BASE}/export${urlParams}`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
   if (!response.ok) throw new Error('导出失败');

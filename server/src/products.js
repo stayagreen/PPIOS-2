@@ -1,21 +1,31 @@
 import db from "./db.js";
 
 export function getProducts(userId) {
-  return db.prepare(`
+  const products = db.prepare(`
     SELECT p.*, u.username as creator_name 
     FROM products p 
     JOIN users u ON p.created_by = u.id 
     ORDER BY p.created_at DESC
   `).all();
+
+  for (const product of products) {
+    product.skus = db.prepare("SELECT * FROM product_skus WHERE product_id = ?").all(product.id);
+  }
+  return products;
 }
 
 export function getProduct(id) {
-  return db.prepare(`
+  const product = db.prepare(`
     SELECT p.*, u.username as creator_name 
     FROM products p 
     JOIN users u ON p.created_by = u.id 
     WHERE p.id = ?
   `).get(id);
+
+  if (product) {
+    product.skus = db.prepare("SELECT * FROM product_skus WHERE product_id = ?").all(product.id);
+  }
+  return product;
 }
 
 export function checkModelDuplicate(model, excludeId = null) {
@@ -33,28 +43,43 @@ export function createProduct(data, userId) {
   if (checkModelDuplicate(data.model)) {
     throw new Error("产品型号已存在");
   }
-  const stmt = db.prepare(`
-    INSERT INTO products (
-      created_by, model, main_image, size_image, spec, size, net_weight, packaged_weight,
-      factory_price, light_source_spec, light_source_count, catalog_path, remark
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const result = stmt.run(
-    userId, 
-    data.model, 
-    data.main_image || null, 
-    data.size_image || null, 
-    data.spec || null, 
-    data.size || null,
-    data.net_weight || null, 
-    data.packaged_weight || null, 
-    data.factory_price || null, 
-    data.light_source_spec || null,
-    data.light_source_count || null, 
-    data.catalog_path || null, 
-    data.remark || null
-  );
-  return result.lastInsertRowid;
+
+  const transaction = db.transaction((productData, skus) => {
+    const productStmt = db.prepare(`
+      INSERT INTO products (created_by, model) VALUES (?, ?)
+    `);
+    const result = productStmt.run(userId, productData.model);
+    const productId = result.lastInsertRowid;
+
+    const skuStmt = db.prepare(`
+      INSERT INTO product_skus (
+        product_id, spec, size, net_weight, packaged_weight, factory_price, 
+        retail_price, light_source_spec, light_source_count, catalog_path, 
+        remark, main_image, size_image
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const sku of skus) {
+      skuStmt.run(
+        productId,
+        sku.spec || null,
+        sku.size || null,
+        sku.net_weight || null,
+        sku.packaged_weight || null,
+        sku.factory_price || null,
+        sku.retail_price || null,
+        sku.light_source_spec || null,
+        sku.light_source_count || null,
+        sku.catalog_path || null,
+        sku.remark || null,
+        sku.main_image || null,
+        sku.size_image || null
+      );
+    }
+    return productId;
+  });
+
+  return transaction(data, data.skus || []);
 }
 
 export function updateProduct(id, data, userId, role) {
@@ -64,26 +89,48 @@ export function updateProduct(id, data, userId, role) {
   if (role !== "admin" && product.created_by !== userId) {
     throw new Error("没有权限修改此产品");
   }
-  
-  const fields = [];
-  const values = [];
-  
-  const allowFields = ["model", "main_image", "size_image", "spec", "size", "net_weight", 
-    "packaged_weight", "factory_price", "retail_price", "light_source_spec", "light_source_count", 
-    "catalog_path", "remark"];
-  
-  for (const field of allowFields) {
-    if (data[field] !== undefined) {
-      fields.push(`${field} = ?`);
-      values.push(data[field]);
+
+  const transaction = db.transaction((productId, productData, skus) => {
+    // Update product model if changed
+    if (productData.model) {
+      if (checkModelDuplicate(productData.model, productId)) {
+        throw new Error("产品型号已存在");
+      }
+      db.prepare("UPDATE products SET model = ? WHERE id = ?").run(productData.model, productId);
     }
-  }
-  
-  if (fields.length === 0) return id;
-  
-  values.push(id);
-  db.prepare(`UPDATE products SET ${fields.join(", ")} WHERE id = ?`).run(...values);
-  return id;
+
+    // Sync SKUs: easiest way is to delete all and re-insert
+    db.prepare("DELETE FROM product_skus WHERE product_id = ?").run(productId);
+
+    const skuStmt = db.prepare(`
+      INSERT INTO product_skus (
+        product_id, spec, size, net_weight, packaged_weight, factory_price, 
+        retail_price, light_source_spec, light_source_count, catalog_path, 
+        remark, main_image, size_image
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const sku of skus) {
+      skuStmt.run(
+        productId,
+        sku.spec || null,
+        sku.size || null,
+        sku.net_weight || null,
+        sku.packaged_weight || null,
+        sku.factory_price || null,
+        sku.retail_price || null,
+        sku.light_source_spec || null,
+        sku.light_source_count || null,
+        sku.catalog_path || null,
+        sku.remark || null,
+        sku.main_image || null,
+        sku.size_image || null
+      );
+    }
+    return productId;
+  });
+
+  return transaction(id, data, data.skus || []);
 }
 
 export function deleteProduct(id, userId, role) {

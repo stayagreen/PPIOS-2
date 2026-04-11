@@ -100,7 +100,9 @@ async function startServer() {
   });
 
   app.get("/api/export", authMiddleware, async (req: any, res) => {
-    const buffer = await exportProducts();
+    const ids = req.query.ids ? req.query.ids.split(",").map(Number) : null;
+    const s = settings.getSettings();
+    const buffer = await exportProducts(ids, s.export_template);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", "attachment; filename=products.xlsx");
     res.send(buffer);
