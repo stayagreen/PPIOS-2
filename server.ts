@@ -14,6 +14,7 @@ import db from "./server/src/db.js";
 import * as auth from "./server/src/auth.js";
 import * as products from "./server/src/products.js";
 import * as settings from "./server/src/settings.js";
+import * as suppliers from "./server/src/suppliers.js";
 import { exportProducts } from "./server/src/export.js";
 import bcrypt from "bcryptjs";
 
@@ -172,6 +173,29 @@ async function startServer() {
     const s = settings.getSettings();
     const model = settings.generateModelNumber(s.model_prefix, s.model_start_number);
     res.json({ model });
+  });
+
+  app.get("/api/suppliers", authMiddleware, (req: any, res) => {
+    res.json(suppliers.getSuppliers());
+  });
+
+  app.post("/api/suppliers", authMiddleware, (req: any, res) => {
+    const id = suppliers.createSupplier(req.body);
+    res.json({ id });
+  });
+
+  app.put("/api/suppliers/:id", authMiddleware, (req: any, res) => {
+    suppliers.updateSupplier(req.params.id, req.body);
+    res.json({ success: true });
+  });
+
+  app.delete("/api/suppliers/:id", authMiddleware, (req: any, res) => {
+    try {
+      suppliers.deleteSupplier(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
   });
 
   app.put("/api/user/password", authMiddleware, (req: any, res) => {

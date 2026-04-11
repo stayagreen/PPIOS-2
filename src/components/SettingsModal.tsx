@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Loader2, UserPlus, Trash2, Users } from 'lucide-react';
+import { X, Loader2, UserPlus, Trash2, Users, Layout } from 'lucide-react';
 import { fetchApi } from '../lib/api';
+import ExcelTemplateEditor from './ExcelTemplateEditor';
 
 interface SettingsModalProps {
   user: any;
@@ -27,6 +28,7 @@ export default function SettingsModal({ user, onClose }: SettingsModalProps) {
   });
 
   const [exportTemplate, setExportTemplate] = useState<any>(null);
+  const [isTemplateEditorOpen, setIsTemplateEditorOpen] = useState(false);
 
   useEffect(() => {
     fetchApi('/settings').then(res => {
@@ -126,16 +128,29 @@ export default function SettingsModal({ user, onClose }: SettingsModalProps) {
     try {
       await fetchApi('/settings', {
         method: 'PUT',
-        body: JSON.stringify({
-          ...settings,
-          export_template: JSON.stringify(exportTemplate)
-        }),
+        body: JSON.stringify(settings),
       });
       showNotification('设置已保存');
     } catch (err: any) {
       showNotification(err.message, 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveTemplate = async (newTemplate: any) => {
+    setExportTemplate(newTemplate);
+    try {
+      await fetchApi('/settings', {
+        method: 'PUT',
+        body: JSON.stringify({
+          ...settings,
+          export_template: JSON.stringify(newTemplate)
+        }),
+      });
+      showNotification('导出模板已更新');
+    } catch (err: any) {
+      showNotification('模板更新失败', 'error');
     }
   };
 
@@ -149,6 +164,13 @@ export default function SettingsModal({ user, onClose }: SettingsModalProps) {
     setExportTemplate({
       ...exportTemplate,
       font: { ...exportTemplate.font, [field]: value }
+    });
+  };
+
+  const updateTemplateHeader = (field: string, value: any) => {
+    setExportTemplate({
+      ...exportTemplate,
+      header: { ...exportTemplate.header, [field]: value }
     });
   };
 
@@ -232,74 +254,18 @@ export default function SettingsModal({ user, onClose }: SettingsModalProps) {
 
               {exportTemplate && (
                 <section className="space-y-4">
-                  <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Excel 导出模板</h3>
-                  
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-slate-700">字体设置</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                      <div>
-                        <label className="block text-[10px] text-slate-400 uppercase mb-1">字体名称</label>
-                        <input value={exportTemplate.font.name} onChange={e => updateTemplateFont('name', e.target.value)} className="w-full text-xs px-2 py-1 border border-slate-300 rounded" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-slate-400 uppercase mb-1">字号</label>
-                        <input type="number" value={exportTemplate.font.size} onChange={e => updateTemplateFont('size', parseInt(e.target.value))} className="w-full text-xs px-2 py-1 border border-slate-300 rounded" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-slate-400 uppercase mb-1">颜色</label>
-                        <input type="color" value={exportTemplate.font.color.startsWith('#') ? exportTemplate.font.color : '#' + exportTemplate.font.color} onChange={e => updateTemplateFont('color', e.target.value)} className="w-full h-6 p-0 border border-slate-300 rounded" />
-                      </div>
-                      <div className="flex items-end pb-1">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="checkbox" checked={exportTemplate.font.bold} onChange={e => updateTemplateFont('bold', e.target.checked)} className="rounded text-blue-600" />
-                          <span className="text-xs text-slate-600">加粗</span>
-                        </label>
-                      </div>
-                    </div>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Excel 导出设置</h3>
+                    <button 
+                      type="button"
+                      onClick={() => setIsTemplateEditorOpen(true)}
+                      className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors border border-blue-100"
+                    >
+                      <Layout className="w-3.5 h-3.5" />
+                      打开模板编辑器
+                    </button>
                   </div>
-
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-slate-700">表头预览与编辑 (Excel 风格)</label>
-                    <div className="overflow-x-auto border border-slate-300 rounded-lg bg-slate-100 p-1">
-                      <div className="flex min-w-max">
-                        {exportTemplate.columns.map((col: any, idx: number) => (
-                          <div 
-                            key={col.key} 
-                            className={`flex flex-col w-32 border-r border-slate-300 last:border-r-0 transition-opacity ${!col.enabled ? 'opacity-50' : ''}`}
-                          >
-                            {/* Column Index / Letter (Excel style) */}
-                            <div className="bg-slate-200 text-[10px] text-slate-500 text-center py-1 border-b border-slate-300 font-medium">
-                              {String.fromCharCode(65 + (idx % 26))}{idx >= 26 ? Math.floor(idx / 26) : ''}
-                            </div>
-                            
-                            {/* Header Input Cell */}
-                            <div className="bg-white p-1">
-                              <input 
-                                value={col.header} 
-                                onChange={e => updateTemplateColumn(idx, 'header', e.target.value)} 
-                                className={`w-full text-xs px-2 py-1.5 border-none focus:ring-2 focus:ring-blue-500 outline-none text-center font-semibold ${!col.enabled ? 'text-slate-400' : 'text-slate-900'}`}
-                                placeholder="表头名称"
-                              />
-                            </div>
-                            
-                            {/* Controls Cell */}
-                            <div className="bg-slate-50 p-2 flex flex-col items-center gap-1 border-t border-slate-200">
-                              <input 
-                                type="checkbox" 
-                                checked={col.enabled} 
-                                onChange={e => updateTemplateColumn(idx, 'enabled', e.target.checked)} 
-                                className="rounded text-blue-600 w-3 h-3 cursor-pointer" 
-                              />
-                              <span className="text-[9px] text-slate-400 font-mono truncate w-full text-center" title={col.key}>
-                                {col.key}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-slate-400">提示：左右滚动可查看更多列。点击单元格直接编辑表头文字，勾选下方复选框启用/禁用该列。</p>
-                  </div>
+                  <p className="text-xs text-slate-400">点击上方按钮进入高级编辑器，可自定义 Excel 表头样式、标题、字体及列显示。</p>
                 </section>
               )}
 
@@ -432,6 +398,13 @@ export default function SettingsModal({ user, onClose }: SettingsModalProps) {
           )}
         </div>
       </div>
+      {isTemplateEditorOpen && (
+        <ExcelTemplateEditor 
+          initialTemplate={exportTemplate} 
+          onClose={() => setIsTemplateEditorOpen(false)}
+          onSave={handleSaveTemplate}
+        />
+      )}
     </div>
   );
 }

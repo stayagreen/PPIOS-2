@@ -9,6 +9,7 @@ import db from "./db.js";
 import * as auth from "./auth.js";
 import * as products from "./products.js";
 import * as settings from "./settings.js";
+import * as suppliers from "./suppliers.js";
 import { exportProducts } from "./export.js";
 import bcrypt from "bcryptjs";
 
@@ -118,6 +119,29 @@ app.get("/api/model/generate", authMiddleware, (req, res) => {
   const s = settings.getSettings();
   const model = settings.generateModelNumber(s.model_prefix, s.model_start_number);
   res.json({ model });
+});
+
+app.get("/api/suppliers", authMiddleware, (req, res) => {
+  res.json(suppliers.getSuppliers());
+});
+
+app.post("/api/suppliers", authMiddleware, (req, res) => {
+  const id = suppliers.createSupplier(req.body);
+  res.json({ id });
+});
+
+app.put("/api/suppliers/:id", authMiddleware, (req, res) => {
+  suppliers.updateSupplier(req.params.id, req.body);
+  res.json({ success: true });
+});
+
+app.delete("/api/suppliers/:id", authMiddleware, (req, res) => {
+  try {
+    suppliers.deleteSupplier(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 app.put("/api/user/password", authMiddleware, (req, res) => {

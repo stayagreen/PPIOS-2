@@ -2,7 +2,7 @@ import db from "./db.js";
 
 export function getProducts(userId) {
   const products = db.prepare(`
-    SELECT p.*, u.username as creator_name 
+    SELECT p.*, u.username as creator_name
     FROM products p 
     JOIN users u ON p.created_by = u.id 
     ORDER BY p.created_at DESC
@@ -14,13 +14,18 @@ export function getProducts(userId) {
       sku.other_images = sku.other_images ? JSON.parse(sku.other_images) : [];
       sku.other_files = sku.other_files ? JSON.parse(sku.other_files) : [];
     }
+    product.suppliers = db.prepare(`
+      SELECT s.*, ps.factory_model FROM suppliers s
+      JOIN product_suppliers ps ON s.id = ps.supplier_id
+      WHERE ps.product_id = ?
+    `).all(product.id);
   }
   return products;
 }
 
 export function getProduct(id) {
   const product = db.prepare(`
-    SELECT p.*, u.username as creator_name 
+    SELECT p.*, u.username as creator_name
     FROM products p 
     JOIN users u ON p.created_by = u.id 
     WHERE p.id = ?
@@ -32,6 +37,11 @@ export function getProduct(id) {
       sku.other_images = sku.other_images ? JSON.parse(sku.other_images) : [];
       sku.other_files = sku.other_files ? JSON.parse(sku.other_files) : [];
     }
+    product.suppliers = db.prepare(`
+      SELECT s.*, ps.factory_model FROM suppliers s
+      JOIN product_suppliers ps ON s.id = ps.supplier_id
+      WHERE ps.product_id = ?
+    `).all(product.id);
   }
   return product;
 }
@@ -52,19 +62,26 @@ export function createProduct(data, userId) {
     throw new Error("产品型号已存在");
   }
 
-  const transaction = db.transaction((productData, skus) => {
+  const transaction = db.transaction((productData, skus, suppliers) => {
     const productStmt = db.prepare(`
-      INSERT INTO products (created_by, model) VALUES (?, ?)
+      INSERT INTO products (created_by, model, catalog_path) VALUES (?, ?, ?)
     `);
-    const result = productStmt.run(userId, productData.model);
+    const result = productStmt.run(userId, productData.model, productData.catalog_path || null);
     const productId = result.lastInsertRowid;
+
+    if (suppliers && suppliers.length > 0) {
+      const supplierStmt = db.prepare("INSERT INTO product_suppliers (product_id, supplier_id, factory_model) VALUES (?, ?, ?)");
+      for (const s of suppliers) {
+        supplierStmt.run(productId, s.id, s.factory_model || null);
+      }
+    }
 
     const skuStmt = db.prepare(`
       INSERT INTO product_skus (
         product_id, spec, size, net_weight, packaged_weight, factory_price, 
-        retail_price, light_source_spec, light_source_count, catalog_path, 
+        retail_price, light_source_spec, light_source_count, 
         remark, main_image, size_image, other_images, other_files
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const sku of skus) {
@@ -78,7 +95,6 @@ export function createProduct(data, userId) {
         sku.retail_price || null,
         sku.light_source_spec || null,
         sku.light_source_count || null,
-        sku.catalog_path || null,
         sku.remark || null,
         sku.main_image || null,
         sku.size_image || null,
@@ -89,7 +105,7 @@ export function createProduct(data, userId) {
     return productId;
   });
 
-  return transaction(data, data.skus || []);
+  return transaction(data, data.skus || [], data.suppliers || []);
 }
 
 export function updateProduct(id, data, userId, role) {
@@ -100,13 +116,34 @@ export function updateProduct(id, data, userId, role) {
     throw new Error("没有权限修改此产品");
   }
 
-  const transaction = db.transaction((productId, productData, skus) => {
-    // Update product model if changed
+  const transaction = db.transaction((productId, productData, skus, suppliers) => {
+    // Update product model and catalog_path if changed
+    const updateFields = [];
+    const params = [];
     if (productData.model) {
       if (checkModelDuplicate(productData.model, productId)) {
         throw new Error("产品型号已存在");
       }
-      db.prepare("UPDATE products SET model = ? WHERE id = ?").run(productData.model, productId);
+      updateFields.push("model = ?");
+      params.push(productData.model);
+    }
+    if (productData.hasOwnProperty('catalog_path')) {
+      updateFields.push("catalog_path = ?");
+      params.push(productData.catalog_path || null);
+    }
+    
+    if (updateFields.length > 0) {
+      params.push(productId);
+      db.prepare(`UPDATE products SET ${updateFields.join(', ')} WHERE id = ?`).run(...params);
+    }
+
+    // Sync suppliers
+    db.prepare("DELETE FROM product_suppliers WHERE product_id = ?").run(productId);
+    if (suppliers && suppliers.length > 0) {
+      const supplierStmt = db.prepare("INSERT INTO product_suppliers (product_id, supplier_id, factory_model) VALUES (?, ?, ?)");
+      for (const s of suppliers) {
+        supplierStmt.run(productId, s.id, s.factory_model || null);
+      }
     }
 
     // Sync SKUs: easiest way is to delete all and re-insert
@@ -115,9 +152,9 @@ export function updateProduct(id, data, userId, role) {
     const skuStmt = db.prepare(`
       INSERT INTO product_skus (
         product_id, spec, size, net_weight, packaged_weight, factory_price, 
-        retail_price, light_source_spec, light_source_count, catalog_path, 
+        retail_price, light_source_spec, light_source_count, 
         remark, main_image, size_image, other_images, other_files
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const sku of skus) {
@@ -131,7 +168,6 @@ export function updateProduct(id, data, userId, role) {
         sku.retail_price || null,
         sku.light_source_spec || null,
         sku.light_source_count || null,
-        sku.catalog_path || null,
         sku.remark || null,
         sku.main_image || null,
         sku.size_image || null,
@@ -142,7 +178,7 @@ export function updateProduct(id, data, userId, role) {
     return productId;
   });
 
-  return transaction(id, data, data.skus || []);
+  return transaction(id, data, data.skus || [], data.suppliers || []);
 }
 
 export function deleteProduct(id, userId, role) {
