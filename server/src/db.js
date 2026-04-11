@@ -8,6 +8,8 @@ const __dirname = dirname(__filename);
 
 const db = new Database(join(__dirname, "..", "database.db"));
 db.exec("PRAGMA foreign_keys = ON;");
+const fkStatus = db.prepare("PRAGMA foreign_keys").get();
+console.log(`Foreign keys status: ${fkStatus.foreign_keys === 1 ? 'ON' : 'OFF'}`);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -94,12 +96,41 @@ if (!productColumnNames.includes("factory_model")) {
 }
 
 // Migration: Migrate supplier_id to product_suppliers and clear legacy column
-const productsWithSupplier = db.prepare("SELECT id, supplier_id FROM products WHERE supplier_id IS NOT NULL").all();
-const insertSupplierStmt = db.prepare("INSERT OR IGNORE INTO product_suppliers (product_id, supplier_id) VALUES (?, ?)");
-const clearSupplierStmt = db.prepare("UPDATE products SET supplier_id = NULL WHERE id = ?");
-for (const p of productsWithSupplier) {
-  insertSupplierStmt.run(p.id, p.supplier_id);
-  clearSupplierStmt.run(p.id);
+try {
+  // Clean up orphaned records first to avoid foreign key violations during migration
+  db.exec("DELETE FROM product_skus WHERE product_id NOT IN (SELECT id FROM products)");
+  db.exec("DELETE FROM product_suppliers WHERE product_id NOT IN (SELECT id FROM products)");
+  db.exec("DELETE FROM product_suppliers WHERE supplier_id NOT IN (SELECT id FROM suppliers)");
+  
+  // Ensure all products have a valid creator
+  const admin = db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get();
+  if (admin) {
+    db.prepare("UPDATE products SET created_by = ? WHERE created_by NOT IN (SELECT id FROM users)").run(admin.id);
+  }
+
+  const productsWithSupplier = db.prepare(`
+    SELECT p.id, p.supplier_id 
+    FROM products p
+    JOIN suppliers s ON p.supplier_id = s.id
+    WHERE p.supplier_id IS NOT NULL
+  `).all();
+  
+  const insertSupplierStmt = db.prepare("INSERT OR IGNORE INTO product_suppliers (product_id, supplier_id) VALUES (?, ?)");
+  const clearSupplierStmt = db.prepare("UPDATE products SET supplier_id = NULL WHERE id = ?");
+  
+  for (const p of productsWithSupplier) {
+    try {
+      insertSupplierStmt.run(p.id, p.supplier_id);
+      clearSupplierStmt.run(p.id);
+    } catch (e) {
+      console.error(`Failed to migrate supplier for product ${p.id}:`, e);
+    }
+  }
+
+  // Also clear any orphaned supplier_ids that don't exist in suppliers table
+  db.exec("UPDATE products SET supplier_id = NULL WHERE supplier_id IS NOT NULL AND supplier_id NOT IN (SELECT id FROM suppliers)");
+} catch (e) {
+  console.error("Migration failed:", e);
 }
 
 // Migration: Add other_images and other_files to product_skus if they don't exist

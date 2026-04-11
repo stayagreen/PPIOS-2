@@ -75,7 +75,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     }
   };
 
-  const filteredProducts = products.filter(p => 
+  const filteredProducts = (products || []).filter(p => 
     !search || p.model.toLowerCase().includes(search.toLowerCase())
   );
 

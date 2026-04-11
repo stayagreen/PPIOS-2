@@ -20,6 +20,12 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.reload();
+      return;
+    }
     let errorMsg = 'API Error';
     try {
       const errData = await response.json();
@@ -37,7 +43,15 @@ export async function exportExcel(ids?: number[]) {
   const response = await fetch(`${API_BASE}/export${urlParams}`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
-  if (!response.ok) throw new Error('导出失败');
+  if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.reload();
+      return;
+    }
+    throw new Error('导出失败');
+  }
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

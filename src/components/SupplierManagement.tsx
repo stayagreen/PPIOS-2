@@ -37,7 +37,7 @@ export default function SupplierManagement() {
     }
   };
 
-  const filteredSuppliers = suppliers.filter(s => 
+  const filteredSuppliers = (suppliers || []).filter(s => 
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (s.contact_person && s.contact_person.toLowerCase().includes(searchQuery.toLowerCase()))
   );

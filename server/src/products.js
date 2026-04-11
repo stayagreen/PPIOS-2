@@ -197,6 +197,11 @@ export function deleteProduct(id, userId, role) {
     throw new Error("没有权限删除此产品");
   }
   
-  db.prepare("DELETE FROM products WHERE id = ?").run(id);
+  const transaction = db.transaction((productId) => {
+    db.prepare("DELETE FROM product_skus WHERE product_id = ?").run(productId);
+    db.prepare("DELETE FROM product_suppliers WHERE product_id = ?").run(productId);
+    db.prepare("DELETE FROM products WHERE id = ?").run(productId);
+  });
+  transaction(id);
   return true;
 }

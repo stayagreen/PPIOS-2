@@ -42,8 +42,13 @@ async function startServer() {
 
   function authMiddleware(req: any, res: any, next: any) {
     const token = req.headers.authorization?.replace("Bearer ", "");
-    const user = auth.verifyToken(token);
-    if (!user) return res.status(401).json({ error: "未登录" });
+    const payload = auth.verifyToken(token) as any;
+    if (!payload) return res.status(401).json({ error: "未登录" });
+    
+    // Verify user still exists in database to prevent foreign key errors during operations
+    const user = db.prepare("SELECT id, username, role FROM users WHERE id = ?").get(payload.id);
+    if (!user) return res.status(401).json({ error: "用户不存在或已被删除" });
+    
     req.user = user;
     next();
   }
@@ -126,8 +131,15 @@ async function startServer() {
 
   app.post("/api/products", authMiddleware, (req: any, res) => {
     if (!req.body.model) return res.status(400).json({ error: "产品型号不能为空" });
-    const id = products.createProduct(req.body, req.user.id);
-    res.json({ id });
+    try {
+      const id = products.createProduct(req.body, req.user.id);
+      res.json({ id });
+    } catch (e: any) {
+      if (e.code === "SQLITE_CONSTRAINT_FOREIGNKEY") {
+        return res.status(400).json({ error: "数据关联错误，请检查供应商或用户状态" });
+      }
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.put("/api/products/:id", authMiddleware, (req: any, res) => {
@@ -172,8 +184,12 @@ async function startServer() {
     if (req.user.role !== "admin") {
       return res.status(403).json({ error: "只有管理员可以修改设置" });
     }
-    settings.updateSettings(req.body);
-    res.json({ success: true });
+    try {
+      settings.updateSettings(req.body);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
   });
 
   app.get("/api/model/generate", authMiddleware, (req: any, res) => {
@@ -187,13 +203,21 @@ async function startServer() {
   });
 
   app.post("/api/suppliers", authMiddleware, (req: any, res) => {
-    const id = suppliers.createSupplier(req.body);
-    res.json({ id });
+    try {
+      const id = suppliers.createSupplier(req.body);
+      res.json({ id });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
   });
 
   app.put("/api/suppliers/:id", authMiddleware, (req: any, res) => {
-    suppliers.updateSupplier(req.params.id, req.body);
-    res.json({ success: true });
+    try {
+      suppliers.updateSupplier(req.params.id, req.body);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
   });
 
   app.delete("/api/suppliers/:id", authMiddleware, (req: any, res) => {
@@ -210,13 +234,17 @@ async function startServer() {
     if (!oldPassword || !newPassword) {
       return res.status(400).json({ error: "缺少参数" });
     }
-    const user: any = db.prepare("SELECT password FROM users WHERE id = ?").get(req.user.id);
-    if (!bcrypt.compareSync(oldPassword, user.password)) {
-      return res.status(400).json({ error: "原密码错误" });
+    try {
+      const user: any = db.prepare("SELECT password FROM users WHERE id = ?").get(req.user.id);
+      if (!user || !bcrypt.compareSync(oldPassword, user.password)) {
+        return res.status(400).json({ error: "原密码错误" });
+      }
+      const hashed = bcrypt.hashSync(newPassword, 10);
+      db.prepare("UPDATE users SET password = ? WHERE id = ?").run(hashed, req.user.id);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
-    const hashed = bcrypt.hashSync(newPassword, 10);
-    db.prepare("UPDATE users SET password = ? WHERE id = ?").run(hashed, req.user.id);
-    res.json({ success: true });
   });
 
   // Vite middleware for development

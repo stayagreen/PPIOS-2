@@ -175,7 +175,7 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
 
   const removeSku = (index: number) => {
     if (skus.length <= 1) return;
-    const newSkus = skus.filter((_, i) => i !== index);
+    const newSkus = (skus || []).filter((_, i) => i !== index);
     setSkus(newSkus);
     if (activeSkuIndex >= newSkus.length) {
       setActiveSkuIndex(newSkus.length - 1);
@@ -206,7 +206,7 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
   };
 
   const removeFile = (skuIndex: number, field: 'other_images' | 'other_files', fileIndex: number) => {
-    const currentList = skus[skuIndex][field];
+    const currentList = skus[skuIndex][field] || [];
     handleSkuChange(skuIndex, field, currentList.filter((_, i) => i !== fileIndex));
   };
 
@@ -220,9 +220,9 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
     setSelectedSuppliers(prev => {
       const exists = prev.find(s => s.id === supplier.id);
       if (exists) {
-        return prev.filter(s => s.id !== supplier.id);
+        return (prev || []).filter(s => s.id !== supplier.id);
       } else {
-        return [...prev, { id: supplier.id, name: supplier.name, factory_model: '' }];
+        return [...(prev || []), { id: supplier.id, name: supplier.name, factory_model: '' }];
       }
     });
   };

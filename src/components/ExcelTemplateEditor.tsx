@@ -44,7 +44,7 @@ export default function ExcelTemplateEditor({ initialTemplate, onClose, onSave }
     }
   };
 
-  const enabledColumns = template.columns.filter((c: any) => c.enabled);
+  const enabledColumns = (template?.columns || []).filter((c: any) => c.enabled);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 sm:p-8">
