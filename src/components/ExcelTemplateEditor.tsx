@@ -218,7 +218,6 @@ export default function ExcelTemplateEditor({ initialTemplate, onClose, onSave }
                             const input = document.createElement('input');
                             input.type = 'file';
                             input.accept = 'image/*';
-                            input.setAttribute('capture', 'environment');
                             input.onchange = async (e: any) => {
                               const file = e.target.files?.[0];
                               if (file) {

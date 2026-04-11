@@ -12,6 +12,8 @@ export default function ImageUpload({ label, value, onChange }: ImageUploadProps
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -44,6 +46,15 @@ export default function ImageUpload({ label, value, onChange }: ImageUploadProps
     }
   };
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (isMobile) {
+      fileInputRef.current?.click();
+    } else {
+      // Focus the element on click to allow pasting immediately
+      (e.currentTarget as HTMLElement).focus();
+    }
+  };
+
   return (
     <div className="space-y-2">
       <label className="block text-sm font-medium text-slate-700">{label}</label>
@@ -60,13 +71,12 @@ export default function ImageUpload({ label, value, onChange }: ImageUploadProps
         </div>
       ) : (
         <div
-          onMouseDown={(e) => {
-            // Focus the element on mouse down to allow pasting immediately
-            e.currentTarget.focus();
-          }}
+          onClick={handleClick}
           onDoubleClick={(e) => {
-            // Open file dialog on double click
-            fileInputRef.current?.click();
+            if (!isMobile) {
+              // Open file dialog on double click for desktop
+              fileInputRef.current?.click();
+            }
           }}
           onPaste={handlePaste}
           tabIndex={0}
@@ -77,7 +87,9 @@ export default function ImageUpload({ label, value, onChange }: ImageUploadProps
           ) : (
             <>
               <UploadCloud className="w-6 h-6 mb-2 pointer-events-none" />
-              <span className="text-[10px] font-medium px-2 text-center pointer-events-none">单击后粘贴<br/>双击上传文件</span>
+              <span className="text-[10px] font-medium px-2 text-center pointer-events-none">
+                {isMobile ? '点击上传图片' : <>单击后粘贴<br/>双击上传文件</>}
+              </span>
             </>
           )}
         </div>
@@ -87,7 +99,6 @@ export default function ImageUpload({ label, value, onChange }: ImageUploadProps
         ref={fileInputRef}
         className="hidden"
         accept="image/*"
-        capture="environment"
         onChange={handleFileChange}
       />
     </div>

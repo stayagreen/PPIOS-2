@@ -31,21 +31,35 @@ interface OtherImageUploadProps {
 }
 
 function OtherImageUpload({ onUpload }: OtherImageUploadProps) {
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
   return (
     <div 
-      onMouseDown={(e) => {
-        e.currentTarget.focus();
+      onClick={(e) => {
+        if (isMobile) {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/*';
+          input.onchange = (e: any) => {
+            const file = e.target.files?.[0];
+            if (file) onUpload(file);
+          };
+          input.click();
+        } else {
+          e.currentTarget.focus();
+        }
       }}
       onDoubleClick={() => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.setAttribute('capture', 'environment');
-        input.onchange = (e: any) => {
-          const file = e.target.files?.[0];
-          if (file) onUpload(file);
-        };
-        input.click();
+        if (!isMobile) {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/*';
+          input.onchange = (e: any) => {
+            const file = e.target.files?.[0];
+            if (file) onUpload(file);
+          };
+          input.click();
+        }
       }}
       onPaste={(e) => {
         e.preventDefault();
@@ -63,7 +77,7 @@ function OtherImageUpload({ onUpload }: OtherImageUploadProps) {
       }}
       tabIndex={0}
       className="h-20 w-20 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center text-slate-400 hover:border-blue-500 hover:text-blue-500 cursor-pointer transition-colors bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-blue-50/30"
-      title="单击后粘贴，双击上传文件"
+      title={isMobile ? "点击上传图片" : "单击后粘贴，双击上传文件"}
     >
       <Plus className="w-5 h-5 pointer-events-none" />
     </div>
