@@ -440,7 +440,7 @@ export default function SettingsModal({ user, onClose }: SettingsModalProps) {
       </div>
       {isTemplateEditorOpen && (
         <ExcelTemplateEditor 
-          initialTemplate={exportTemplate || DEFAULT_TEMPLATE} 
+          initialTemplate={(exportTemplate && exportTemplate.header && exportTemplate.columns && exportTemplate.font) ? exportTemplate : DEFAULT_TEMPLATE} 
           onClose={() => setIsTemplateEditorOpen(false)}
           onSave={handleSaveTemplate}
         />
