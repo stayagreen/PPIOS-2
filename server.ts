@@ -78,6 +78,27 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  app.put("/api/users/:id", authMiddleware, (req: any, res) => {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "权限不足" });
+    }
+    const { username, password, role } = req.body;
+    if (!username) return res.status(400).json({ error: "用户名不能为空" });
+    
+    try {
+      if (password) {
+        const hashed = bcrypt.hashSync(password, 10);
+        db.prepare("UPDATE users SET username = ?, password = ?, role = ? WHERE id = ?").run(username, hashed, role, req.params.id);
+      } else {
+        db.prepare("UPDATE users SET username = ?, role = ? WHERE id = ?").run(username, role, req.params.id);
+      }
+      res.json({ success: true });
+    } catch (e: any) {
+      if (e.code === "SQLITE_CONSTRAINT_UNIQUE") return res.status(400).json({ error: "用户名已存在" });
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/login", (req, res) => {
     const { username, password } = req.body;
     const result = auth.login(username, password);

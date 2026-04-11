@@ -15,7 +15,10 @@ export default function ImageUpload({ label, value, onChange }: ImageUploadProps
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    upload(file);
+  };
 
+  const upload = async (file: File) => {
     setLoading(true);
     try {
       const url = await uploadImage(file);
@@ -25,6 +28,19 @@ export default function ImageUpload({ label, value, onChange }: ImageUploadProps
     } finally {
       setLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          upload(file);
+          break;
+        }
+      }
     }
   };
 
@@ -44,15 +60,24 @@ export default function ImageUpload({ label, value, onChange }: ImageUploadProps
         </div>
       ) : (
         <div
-          onClick={() => fileInputRef.current?.click()}
-          className="h-32 w-32 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-500 hover:border-blue-500 hover:text-blue-500 cursor-pointer transition-colors bg-slate-50"
+          onMouseDown={(e) => {
+            // Focus the element on mouse down to allow pasting immediately
+            e.currentTarget.focus();
+          }}
+          onDoubleClick={(e) => {
+            // Open file dialog on double click
+            fileInputRef.current?.click();
+          }}
+          onPaste={handlePaste}
+          tabIndex={0}
+          className="h-32 w-32 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-500 hover:border-blue-500 hover:text-blue-500 cursor-pointer transition-colors bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-blue-50/30"
         >
           {loading ? (
             <Loader2 className="w-6 h-6 animate-spin" />
           ) : (
             <>
-              <UploadCloud className="w-6 h-6 mb-2" />
-              <span className="text-xs font-medium">点击上传</span>
+              <UploadCloud className="w-6 h-6 mb-2 pointer-events-none" />
+              <span className="text-[10px] font-medium px-2 text-center pointer-events-none">单击后粘贴<br/>双击上传文件</span>
             </>
           )}
         </div>

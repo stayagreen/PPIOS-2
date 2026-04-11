@@ -10,6 +10,10 @@ export function getProducts(userId) {
 
   for (const product of products) {
     product.skus = db.prepare("SELECT * FROM product_skus WHERE product_id = ?").all(product.id);
+    for (const sku of product.skus) {
+      sku.other_images = sku.other_images ? JSON.parse(sku.other_images) : [];
+      sku.other_files = sku.other_files ? JSON.parse(sku.other_files) : [];
+    }
   }
   return products;
 }
@@ -24,6 +28,10 @@ export function getProduct(id) {
 
   if (product) {
     product.skus = db.prepare("SELECT * FROM product_skus WHERE product_id = ?").all(product.id);
+    for (const sku of product.skus) {
+      sku.other_images = sku.other_images ? JSON.parse(sku.other_images) : [];
+      sku.other_files = sku.other_files ? JSON.parse(sku.other_files) : [];
+    }
   }
   return product;
 }
@@ -55,8 +63,8 @@ export function createProduct(data, userId) {
       INSERT INTO product_skus (
         product_id, spec, size, net_weight, packaged_weight, factory_price, 
         retail_price, light_source_spec, light_source_count, catalog_path, 
-        remark, main_image, size_image
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        remark, main_image, size_image, other_images, other_files
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const sku of skus) {
@@ -73,7 +81,9 @@ export function createProduct(data, userId) {
         sku.catalog_path || null,
         sku.remark || null,
         sku.main_image || null,
-        sku.size_image || null
+        sku.size_image || null,
+        sku.other_images ? JSON.stringify(sku.other_images) : null,
+        sku.other_files ? JSON.stringify(sku.other_files) : null
       );
     }
     return productId;
@@ -106,8 +116,8 @@ export function updateProduct(id, data, userId, role) {
       INSERT INTO product_skus (
         product_id, spec, size, net_weight, packaged_weight, factory_price, 
         retail_price, light_source_spec, light_source_count, catalog_path, 
-        remark, main_image, size_image
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        remark, main_image, size_image, other_images, other_files
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const sku of skus) {
@@ -124,7 +134,9 @@ export function updateProduct(id, data, userId, role) {
         sku.catalog_path || null,
         sku.remark || null,
         sku.main_image || null,
-        sku.size_image || null
+        sku.size_image || null,
+        sku.other_images ? JSON.stringify(sku.other_images) : null,
+        sku.other_files ? JSON.stringify(sku.other_files) : null
       );
     }
     return productId;

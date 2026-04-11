@@ -13,7 +13,10 @@ export default function SettingsModal({ user, onClose }: SettingsModalProps) {
   const [pwdLoading, setPwdLoading] = useState(false);
   const [userLoading, setUserLoading] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
-  const [newUser, setNewUser] = useState({ username: '', password: '', role: 'operator' });
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [userForm, setUserForm] = useState({ username: '', password: '', role: 'operator' });
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [settings, setSettings] = useState({
     model_prefix: '',
     model_start_number: '',
@@ -41,6 +44,17 @@ export default function SettingsModal({ user, onClose }: SettingsModalProps) {
     }
   }, []);
 
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  const showNotification = (text: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ text, type });
+  };
+
   const loadUsers = async () => {
     try {
       const data = await fetchApi('/users');
@@ -50,31 +64,59 @@ export default function SettingsModal({ user, onClose }: SettingsModalProps) {
     }
   };
 
-  const handleAddUser = async (e: React.FormEvent) => {
+  const handleUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setUserLoading(true);
     try {
-      await fetchApi('/users', {
-        method: 'POST',
-        body: JSON.stringify(newUser),
-      });
-      setNewUser({ username: '', password: '', role: 'operator' });
+      if (editingUser) {
+        await fetchApi(`/users/${editingUser.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(userForm),
+        });
+        if (editingUser.id === user.id) {
+          const updatedUser = { ...user, username: userForm.username };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          showNotification('个人信息已更新，请刷新页面以同步显示');
+        } else {
+          showNotification('用户信息已更新');
+        }
+      } else {
+        if (!userForm.password) {
+          throw new Error('新增用户必须填写密码');
+        }
+        await fetchApi('/users', {
+          method: 'POST',
+          body: JSON.stringify(userForm),
+        });
+        showNotification('用户已添加');
+      }
+      setUserForm({ username: '', password: '', role: 'operator' });
+      setEditingUser(null);
       loadUsers();
-      alert('用户已添加');
     } catch (err: any) {
-      alert(err.message);
+      showNotification(err.message, 'error');
     } finally {
       setUserLoading(false);
     }
   };
 
+  const startEditUser = (u: any) => {
+    setEditingUser(u);
+    setUserForm({ username: u.username, password: '', role: u.role });
+  };
+
+  const cancelEditUser = () => {
+    setEditingUser(null);
+    setUserForm({ username: '', password: '', role: 'operator' });
+  };
+
   const handleDeleteUser = async (id: number) => {
-    if (!confirm('确定要删除该用户吗？')) return;
     try {
       await fetchApi(`/users/${id}`, { method: 'DELETE' });
       loadUsers();
+      showNotification('用户已删除');
     } catch (err: any) {
-      alert(err.message);
+      showNotification(err.message, 'error');
     }
   };
 
@@ -89,9 +131,9 @@ export default function SettingsModal({ user, onClose }: SettingsModalProps) {
           export_template: JSON.stringify(exportTemplate)
         }),
       });
-      alert('设置已保存');
+      showNotification('设置已保存');
     } catch (err: any) {
-      alert(err.message);
+      showNotification(err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -118,12 +160,14 @@ export default function SettingsModal({ user, onClose }: SettingsModalProps) {
         method: 'PUT',
         body: JSON.stringify(passwords),
       });
-      alert('密码已修改，请重新登录');
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.reload();
+      showNotification('密码已修改，请重新登录');
+      setTimeout(() => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.reload();
+      }, 2000);
     } catch (err: any) {
-      alert(err.message);
+      showNotification(err.message, 'error');
     } finally {
       setPwdLoading(false);
     }
@@ -162,7 +206,12 @@ export default function SettingsModal({ user, onClose }: SettingsModalProps) {
           </button>
         </div>
 
-        <div className="p-6 space-y-8 overflow-y-auto flex-1">
+        <div className="p-6 space-y-8 overflow-y-auto flex-1 relative">
+          {notification && (
+            <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-[70] px-4 py-2 rounded-md shadow-lg text-sm font-medium animate-in fade-in slide-in-from-top-4 duration-300 ${notification.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+              {notification.text}
+            </div>
+          )}
           {activeTab === 'system' && (
             <form onSubmit={handleSettingsSubmit} className="space-y-6">
               <section className="space-y-4">
@@ -263,29 +312,37 @@ export default function SettingsModal({ user, onClose }: SettingsModalProps) {
 
           {activeTab === 'users' && user.role === 'admin' && (
             <div className="space-y-6">
-              <form onSubmit={handleAddUser} className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-4">
-                <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                  <UserPlus className="w-4 h-4" /> 新增用户
-                </h3>
+              <form onSubmit={handleUserSubmit} className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                    {editingUser ? <Users className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />} 
+                    {editingUser ? `编辑用户: ${editingUser.username}` : '新增用户'}
+                  </h3>
+                  {editingUser && (
+                    <button type="button" onClick={cancelEditUser} className="text-xs text-slate-500 hover:text-slate-700">
+                      取消编辑
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <input 
                     required
                     placeholder="用户名"
-                    value={newUser.username}
-                    onChange={e => setNewUser(s => ({ ...s, username: e.target.value }))}
+                    value={userForm.username}
+                    onChange={e => setUserForm(s => ({ ...s, username: e.target.value }))}
                     className="text-sm px-3 py-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   />
                   <input 
-                    required
+                    required={!editingUser}
                     type="password"
-                    placeholder="密码"
-                    value={newUser.password}
-                    onChange={e => setNewUser(s => ({ ...s, password: e.target.value }))}
+                    placeholder={editingUser ? "留空则不修改密码" : "密码"}
+                    value={userForm.password}
+                    onChange={e => setUserForm(s => ({ ...s, password: e.target.value }))}
                     className="text-sm px-3 py-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   />
                   <select
-                    value={newUser.role}
-                    onChange={e => setNewUser(s => ({ ...s, role: e.target.value }))}
+                    value={userForm.role}
+                    onChange={e => setUserForm(s => ({ ...s, role: e.target.value }))}
                     className="text-sm px-3 py-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="operator">操作员</option>
@@ -294,7 +351,7 @@ export default function SettingsModal({ user, onClose }: SettingsModalProps) {
                 </div>
                 <button type="submit" disabled={userLoading} className="w-full py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 flex justify-center items-center">
                   {userLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  添加用户
+                  {editingUser ? '保存修改' : '添加用户'}
                 </button>
               </form>
 
@@ -316,11 +373,34 @@ export default function SettingsModal({ user, onClose }: SettingsModalProps) {
                             {u.role === 'admin' ? '管理员' : '操作员'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          {u.id !== user.id && (
-                            <button onClick={() => handleDeleteUser(u.id)} className="text-red-500 hover:text-red-700 p-1">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                        <td className="px-4 py-3 text-right flex justify-end gap-2">
+                          {deleteConfirmId === u.id ? (
+                            <div className="flex items-center gap-2 bg-red-50 px-2 py-1 rounded border border-red-100">
+                              <span className="text-[10px] text-red-600 font-medium">确认删除？</span>
+                              <button 
+                                onClick={() => { handleDeleteUser(u.id); setDeleteConfirmId(null); }} 
+                                className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded hover:bg-red-700"
+                              >
+                                确定
+                              </button>
+                              <button 
+                                onClick={() => setDeleteConfirmId(null)} 
+                                className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded hover:bg-slate-300"
+                              >
+                                取消
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <button onClick={() => startEditUser(u)} className="text-blue-500 hover:text-blue-700 p-1">
+                                <Users className="w-4 h-4" />
+                              </button>
+                              {u.id !== user.id && (
+                                <button onClick={() => setDeleteConfirmId(u.id)} className="text-red-500 hover:text-red-700 p-1">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </>
                           )}
                         </td>
                       </tr>

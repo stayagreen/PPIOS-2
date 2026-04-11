@@ -40,6 +40,8 @@ db.exec(`
     remark TEXT,
     main_image TEXT,
     size_image TEXT,
+    other_images TEXT,
+    other_files TEXT,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
   );
 
@@ -48,6 +50,16 @@ db.exec(`
     value TEXT
   );
 `);
+
+// Migration: Add other_images and other_files to product_skus if they don't exist
+const columns = db.prepare("PRAGMA table_info(product_skus)").all();
+const columnNames = columns.map((c) => c.name);
+if (!columnNames.includes("other_images")) {
+  db.exec("ALTER TABLE product_skus ADD COLUMN other_images TEXT");
+}
+if (!columnNames.includes("other_files")) {
+  db.exec("ALTER TABLE product_skus ADD COLUMN other_files TEXT");
+}
 
 const defaultSettings = {
   model_prefix: "PPIOS",
