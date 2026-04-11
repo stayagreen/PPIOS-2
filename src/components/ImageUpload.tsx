@@ -87,6 +87,7 @@ export default function ImageUpload({ label, value, onChange }: ImageUploadProps
         ref={fileInputRef}
         className="hidden"
         accept="image/*"
+        capture="environment"
         onChange={handleFileChange}
       />
     </div>
