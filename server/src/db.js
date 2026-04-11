@@ -171,6 +171,13 @@ if (exportTemplateSetting) {
   }
 }
 
+// Migration: Add unique index to products.model
+try {
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_products_model ON products(model)");
+} catch (e) {
+  console.error("Failed to create unique index on products.model:", e);
+}
+
 // Initialize default admin
 const adminExists = db.prepare("SELECT id FROM users WHERE username = 'admin'").get();
 if (!adminExists) {

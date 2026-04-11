@@ -67,8 +67,12 @@ app.get("/api/products/:id", authMiddleware, (req, res) => {
 
 app.post("/api/products", authMiddleware, (req, res) => {
   if (!req.body.model) return res.status(400).json({ error: "产品型号不能为空" });
-  const id = products.createProduct(req.body, req.user.id);
-  res.json({ id });
+  try {
+    const id = products.createProduct(req.body, req.user.id);
+    res.json({ id });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 app.put("/api/products/:id", authMiddleware, (req, res) => {
