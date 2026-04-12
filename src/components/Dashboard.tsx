@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Package2, Search, Plus, Download, Settings, LogOut, Image as ImageIcon, X, FolderOpen, Eye, FileText, Users, Info } from 'lucide-react';
+import { Package2, Search, Plus, Download, Settings, LogOut, Image as ImageIcon, X, FolderOpen, Eye, FileText, Users, Info, Upload, ChevronDown, FileSpreadsheet, Folder } from 'lucide-react';
 import { fetchApi, exportExcel } from '../lib/api';
 import ProductModal from './ProductModal';
 import SettingsModal from './SettingsModal';
 import SupplierManagement from './SupplierManagement';
+import ImportExcelModal from './ImportExcelModal';
 
 interface DashboardProps {
   user: { id: number; username: string; role: string };
@@ -15,6 +16,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [search, setSearch] = useState('');
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isImportDropdownOpen, setIsImportDropdownOpen] = useState(false);
+  const [isImportExcelModalOpen, setIsImportExcelModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [viewingProduct, setViewingProduct] = useState<any>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -182,6 +185,53 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             />
           </div>
           <div className="flex flex-wrap gap-2 sm:gap-3">
+            <div className="relative">
+              <button
+                onClick={() => setIsImportDropdownOpen(!isImportDropdownOpen)}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center px-4 py-2 border border-slate-300 shadow-sm text-sm font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                导入产品
+                <ChevronDown className="w-4 h-4 ml-1" />
+              </button>
+              {isImportDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setIsImportDropdownOpen(false)}></div>
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-20 py-1">
+                    <button
+                      onClick={() => {
+                        setIsImportDropdownOpen(false);
+                        setIsImportExcelModalOpen(true);
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                    >
+                      <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                      从Excel文件导入
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsImportDropdownOpen(false);
+                        alert('从文件夹导入功能开发中...');
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                    >
+                      <Folder className="w-4 h-4 text-blue-600" />
+                      从文件夹导入
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsImportDropdownOpen(false);
+                        alert('从供应商报表导入功能开发中...');
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                    >
+                      <FileText className="w-4 h-4 text-purple-600" />
+                      从供应商报表导入
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <button
               onClick={() => exportExcel(selectedIds).catch(e => alert(e.message))}
               className="flex-1 sm:flex-none inline-flex items-center justify-center px-4 py-2 border border-slate-300 shadow-sm text-sm font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
@@ -648,6 +698,16 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             <X className="w-8 h-8" />
           </button>
         </div>
+      )}
+
+      {isImportExcelModalOpen && (
+        <ImportExcelModal 
+          onClose={() => setIsImportExcelModalOpen(false)} 
+          onSuccess={() => {
+            setIsImportExcelModalOpen(false);
+            loadProducts();
+          }} 
+        />
       )}
     </div>
   );
