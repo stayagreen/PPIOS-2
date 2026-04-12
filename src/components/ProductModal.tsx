@@ -116,7 +116,7 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
 
     if (product) {
       setModel(product.model || '');
-      setCatalogPath(product.catalog_path || '');
+      setCatalogPath(product.catalog_path ? product.catalog_path.replace(/^file:\/\/\//, '') : '');
       if (product.suppliers) {
         setSelectedSuppliers(product.suppliers.map((s: any) => ({
           id: s.id,
@@ -240,7 +240,7 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
     try {
       const payload = {
         model,
-        catalog_path: catalogPath,
+        catalog_path: catalogPath.replace(/^file:\/\/\//, ''),
         suppliers: selectedSuppliers.map(s => ({
           id: s.id,
           factory_model: s.factory_model

@@ -178,116 +178,210 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
     return new File([u8arr], filename, { type: mime });
   }
 
+  const extractRowData = async (index: number) => {
+    const ws = worksheetRef.current;
+    const wb = workbookRef.current;
+    if (!ws || !wb) return null;
+
+    const rowNumber = validRowIndices[index];
+    const row = ws.getRow(rowNumber);
+    
+    const mappedData: any = {};
+    
+    const arrayBufferToBase64 = (buffer: ArrayBuffer | Uint8Array) => {
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return window.btoa(binary);
+    };
+
+    excelHeaders.forEach((excelHeader, colIndex) => {
+      if (!excelHeader) return;
+      const fieldKey = mapping[excelHeader];
+      if (fieldKey) {
+        const cell = row.getCell(colIndex + 1);
+        let value = '';
+        try {
+          if (cell.value && typeof cell.value === 'object' && 'formula' in cell.value) {
+            const formula = String((cell.value as any).formula).toUpperCase();
+            const match = formula.match(/IMAGE\(\s*"([^"]+)"/);
+            if (match && match[1]) {
+              value = match[1];
+            } else {
+              value = cell.text;
+            }
+          } else if (cell.value && typeof cell.value === 'object' && 'hyperlink' in cell.value) {
+            value = (cell.value as any).hyperlink.replace(/^file:\/\/\//, '');
+          } else {
+            value = cell.text;
+          }
+        } catch (e) {
+          value = cell.value ? String(cell.value) : '';
+        }
+
+        // Check for image
+        const img = imagesRef.current.find(i => {
+          const tl = i.range.tl;
+          if (!tl) return false;
+          const r = tl.nativeRow !== undefined ? tl.nativeRow : tl.row;
+          const c = tl.nativeCol !== undefined ? tl.nativeCol : tl.col;
+          // More robust matching: allow 0.5 cell margin for embedded images
+          return Math.abs(r - (rowNumber - 1)) < 0.5 && Math.abs(c - colIndex) < 0.5;
+        });
+
+        if (img) {
+          const media = wb.getImage(img.imageId as any);
+          if (media) {
+            let base64 = '';
+            if (media.base64) {
+              base64 = media.base64;
+              if (!base64.startsWith('data:image')) {
+                base64 = `data:image/${media.extension || 'png'};base64,${base64}`;
+              }
+            } else if (media.buffer) {
+              const b64 = arrayBufferToBase64(media.buffer as any);
+              base64 = `data:image/${media.extension || 'png'};base64,${b64}`;
+            }
+            if (base64) {
+              value = base64;
+            }
+          }
+        }
+
+        if (value) {
+          mappedData[fieldKey] = value;
+        }
+      }
+    });
+
+    // Auto-generate model if not mapped or empty
+    if (!mappedData.model) {
+      mappedData.model = `AUTO-${Date.now()}-${index + 1}`;
+    }
+
+    let finalMainImage = '';
+    if (mappedData.main_image && mappedData.main_image.startsWith('data:image')) {
+      try {
+        const file = dataURLtoFile(mappedData.main_image, `excel-img-${index}.png`);
+        finalMainImage = await uploadImage(file);
+      } catch (e) {
+        console.error("Failed to upload excel image", e);
+      }
+    } else if (mappedData.main_image && mappedData.main_image.startsWith('http')) {
+      finalMainImage = mappedData.main_image;
+    }
+
+    let finalSizeImage = '';
+    if (mappedData.size_image && mappedData.size_image.startsWith('data:image')) {
+      try {
+        const file = dataURLtoFile(mappedData.size_image, `excel-size-img-${index}.png`);
+        finalSizeImage = await uploadImage(file);
+      } catch (e) {
+        console.error("Failed to upload excel size image", e);
+      }
+    } else if (mappedData.size_image && mappedData.size_image.startsWith('http')) {
+      finalSizeImage = mappedData.size_image;
+    }
+
+    return {
+      rowData: mappedData,
+      mainImage: finalMainImage,
+      sizeImage: finalSizeImage
+    };
+  };
+
   const prepareRowData = async (index: number) => {
     setLoading(true);
     try {
-      const ws = worksheetRef.current;
-      const wb = workbookRef.current;
-      if (!ws || !wb) return;
-
-      const rowNumber = validRowIndices[index];
-      const row = ws.getRow(rowNumber);
+      const result = await extractRowData(index);
+      if (!result) return;
       
-      const mappedData: any = {};
+      const model = result.rowData.model;
+      const isExisting = existingProducts.some(p => p.model === model);
       
-      const arrayBufferToBase64 = (buffer: ArrayBuffer | Uint8Array) => {
-        let binary = '';
-        const bytes = new Uint8Array(buffer);
-        const len = bytes.byteLength;
-        for (let i = 0; i < len; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        return window.btoa(binary);
-      };
-
-      excelHeaders.forEach((excelHeader, colIndex) => {
-        if (!excelHeader) return;
-        const fieldKey = mapping[excelHeader];
-        if (fieldKey) {
-          const cell = row.getCell(colIndex + 1);
-          let value = '';
-          try {
-            value = cell.text;
-          } catch (e) {
-            value = cell.value ? String(cell.value) : '';
-          }
-
-          // Check for image
-          const img = imagesRef.current.find(i => {
-            const tl = i.range.tl;
-            const r = tl.nativeRow !== undefined ? tl.nativeRow : Math.floor(tl.row);
-            const c = tl.nativeCol !== undefined ? tl.nativeCol : Math.floor(tl.col);
-            return r === rowNumber - 1 && c === colIndex;
-          });
-
-          if (img) {
-            const media = wb.getImage(img.imageId as any);
-            if (media) {
-              let base64 = '';
-              if (media.base64) {
-                base64 = media.base64;
-                if (!base64.startsWith('data:image')) {
-                  base64 = `data:image/${media.extension || 'png'};base64,${base64}`;
-                }
-              } else if (media.buffer) {
-                const b64 = arrayBufferToBase64(media.buffer as any);
-                base64 = `data:image/${media.extension || 'png'};base64,${b64}`;
-              }
-              if (base64) {
-                value = base64;
-              }
-            }
-          }
-
-          if (value) {
-            mappedData[fieldKey] = value;
-          }
-        }
-      });
-
-      // Auto-generate model if not mapped or empty
-      if (!mappedData.model) {
-        mappedData.model = `AUTO-${Date.now()}-${index + 1}`;
-      }
-
-      setCurrentRowData(mappedData);
-      setSizeImage('');
-      
-      if (mappedData.main_image && mappedData.main_image.startsWith('data:image')) {
-        try {
-          const file = dataURLtoFile(mappedData.main_image, `excel-img-${index}.png`);
-          const url = await uploadImage(file);
-          setMainImage(url);
-        } catch (e) {
-          console.error("Failed to upload excel image", e);
-          setMainImage('');
-        }
-      } else if (mappedData.main_image && mappedData.main_image.startsWith('http')) {
-        setMainImage(mappedData.main_image);
-      } else {
-        setMainImage('');
-      }
-
-      if (mappedData.size_image && mappedData.size_image.startsWith('data:image')) {
-        try {
-          const file = dataURLtoFile(mappedData.size_image, `excel-size-img-${index}.png`);
-          const url = await uploadImage(file);
-          setSizeImage(url);
-        } catch (e) {
-          console.error("Failed to upload excel size image", e);
-          setSizeImage('');
-        }
-      } else if (mappedData.size_image && mappedData.size_image.startsWith('http')) {
-        setSizeImage(mappedData.size_image);
-      } else {
-        setSizeImage('');
-      }
-      
+      setCurrentRowData(result.rowData);
+      setMainImage(result.mainImage);
+      setSizeImage(result.sizeImage);
       setCurrentRowIndex(index);
+
+      if (isExisting) {
+        alert(`警告：产品型号 "${model}" 已存在。请确认是否要追加规格或修改数据。`);
+      }
     } catch (error) {
       console.error("Error preparing row data:", error);
       alert("读取行数据失败");
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAutoConfirmRemaining = async () => {
+    setLoading(true);
+    try {
+      const newProcessedRows = [...processedRows];
+      
+      // Add current row if it has a model
+      if (currentRowData.model) {
+        newProcessedRows.push({ ...currentRowData, main_image: mainImage, size_image: sizeImage });
+      }
+
+      // Process remaining rows
+      for (let i = currentRowIndex + 1; i < validRowIndices.length; i++) {
+        setCurrentRowIndex(i);
+        const result = await extractRowData(i);
+        if (result && result.rowData.model) {
+          const isExisting = existingProducts.some(p => p.model === result.rowData.model);
+          if (isExisting) {
+            alert(`在第 ${i + 1} 行发现已存在的产品型号: "${result.rowData.model}"。自动处理已暂停，请手动确认。`);
+            setCurrentRowData(result.rowData);
+            setMainImage(result.mainImage);
+            setSizeImage(result.sizeImage);
+            setProcessedRows(newProcessedRows);
+            setLoading(false);
+            return;
+          }
+          newProcessedRows.push({ ...result.rowData, main_image: result.mainImage, size_image: result.sizeImage });
+        }
+      }
+      
+      setProcessedRows(newProcessedRows);
+      submitImport(newProcessedRows);
+    } catch (error) {
+      console.error("Error auto confirming:", error);
+      alert("自动确认失败");
+      setLoading(false);
+    }
+  };
+
+  const handleAutoSkipRemaining = async () => {
+    setLoading(true);
+    try {
+      // Update progress for all remaining rows
+      for (let i = currentRowIndex; i < validRowIndices.length; i++) {
+        setCurrentRowIndex(i);
+        // Check if model exists
+        const result = await extractRowData(i);
+        if (result && result.rowData.model) {
+          const isExisting = existingProducts.some(p => p.model === result.rowData.model);
+          if (isExisting) {
+            alert(`在第 ${i + 1} 行发现已存在的产品型号: "${result.rowData.model}"。自动跳过已暂停，请手动确认。`);
+            setCurrentRowData(result.rowData);
+            setMainImage(result.mainImage);
+            setSizeImage(result.sizeImage);
+            setLoading(false);
+            return;
+          }
+        }
+        await new Promise(resolve => setTimeout(resolve, 10)); // Small delay for UI update
+      }
+      // Just submit the already processed rows
+      submitImport(processedRows);
+    } catch (error) {
+      console.error("Error auto skipping:", error);
+      alert("自动跳过失败");
       setLoading(false);
     }
   };
@@ -377,6 +471,7 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
         groupedByModel[row.model].push(row);
       });
 
+      let successCount = 0;
       for (const [model, rows] of Object.entries(groupedByModel)) {
         // Find if product exists
         const existingProduct = existingProducts.find(p => p.model === model);
@@ -448,8 +543,10 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
             })
           });
         }
+        successCount += rows.length;
       }
       
+      alert(`成功导入 ${successCount} 个产品规格数据。`);
       onSuccess();
     } catch (error: any) {
       console.error("Import failed:", error);
@@ -645,7 +742,7 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
                   <label className="block text-sm font-medium text-slate-700 mb-1">图片上传</label>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-xs text-slate-500 mb-2">主图</p>
+                      <p className="text-xs text-slate-500 mb-2">SKU图</p>
                       <div 
                         tabIndex={0}
                         className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50 relative overflow-hidden group cursor-pointer focus:ring-2 focus:ring-blue-500 outline-none"
@@ -669,6 +766,13 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
                             <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                               <span className="text-white text-sm font-medium">单击粘贴 / 双击更换</span>
                             </div>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setMainImage(''); }}
+                              className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
                           </>
                         ) : (
                           <div className="flex flex-col items-center justify-center w-full h-full text-slate-400 group-hover:text-blue-500 group-hover:bg-blue-50 transition-colors">
@@ -705,6 +809,13 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
                             <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                               <span className="text-white text-sm font-medium">单击粘贴 / 双击更换</span>
                             </div>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setSizeImage(''); }}
+                              className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
                           </>
                         ) : (
                           <div className="flex flex-col items-center justify-center w-full h-full text-slate-400 group-hover:text-blue-500 group-hover:bg-blue-50 transition-colors">
@@ -767,6 +878,22 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
                   className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
                 >
                   跳过此行
+                </button>
+                <button 
+                  onClick={handleAutoConfirmRemaining}
+                  disabled={loading}
+                  className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200"
+                  title="自动提取并确认余下所有行的数据"
+                >
+                  自动确认余下行
+                </button>
+                <button 
+                  onClick={handleAutoSkipRemaining}
+                  disabled={loading}
+                  className="px-4 py-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors border border-orange-200"
+                  title="直接提交已确认的数据，跳过剩余所有行"
+                >
+                  自动跳过余下行
                 </button>
               </div>
               <button 

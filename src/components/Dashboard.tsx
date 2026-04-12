@@ -22,6 +22,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [viewingProduct, setViewingProduct] = useState<any>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'products' | 'suppliers'>('products');
 
@@ -78,22 +79,42 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setIsBulkDeleteConfirmOpen(true);
+  };
+
+  const confirmBulkDelete = async () => {
+    try {
+      // Use Promise.all for faster execution
+      await Promise.all(selectedIds.map(id => fetchApi(`/products/${id}`, { method: 'DELETE' })));
+      loadProducts();
+      setSelectedIds([]);
+      showNotification('产品已批量删除');
+    } catch (err: any) {
+      showNotification(err.message, 'error');
+    } finally {
+      setIsBulkDeleteConfirmOpen(false);
+    }
+  };
+
   const filteredProducts = (products || []).filter(p => 
     !search || p.model.toLowerCase().includes(search.toLowerCase())
   );
 
   const openDirectory = (path: string) => {
     if (!path) return;
+    const cleanPath = path.replace(/^file:\/\/\//, '');
     
     const copyPath = () => {
-      navigator.clipboard.writeText(path);
+      navigator.clipboard.writeText(cleanPath);
       showNotification('由于浏览器安全限制无法直接打开，路径已复制到剪贴板，请在资源管理器中粘贴打开', 'success');
     };
 
     // Try to open file protocol
     // Note: Most browsers block this for security. 
     try {
-      const win = window.open(`file:///${path.replace(/\\/g, '/')}`, '_blank');
+      const win = window.open(`file:///${cleanPath.replace(/\\/g, '/')}`, '_blank');
       if (!win || win.closed || typeof win.closed === 'undefined') {
         copyPath();
       }
@@ -233,6 +254,13 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               )}
             </div>
             <button
+              onClick={handleBulkDelete}
+              disabled={selectedIds.length === 0}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center px-4 py-2 border border-red-300 shadow-sm text-sm font-medium rounded-lg text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50"
+            >
+              删除已选
+            </button>
+            <button
               onClick={() => exportExcel(selectedIds).catch(e => alert(e.message))}
               className="flex-1 sm:flex-none inline-flex items-center justify-center px-4 py-2 border border-slate-300 shadow-sm text-sm font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
             >
@@ -251,168 +279,164 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
         {/* Desktop Table View */}
         <div className="hidden md:block bg-white shadow-sm border border-slate-200 rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
+          <table className="min-w-full table-fixed divide-y divide-slate-200">
+            <thead className="bg-slate-50">
+              <tr>
+                <th scope="col" className="w-12 px-6 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
+                    checked={selectedIds.length === filteredProducts.length && filteredProducts.length > 0}
+                    onChange={toggleSelectAll}
+                  />
+                </th>
+                <th scope="col" className="w-16 px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ID</th>
+                <th scope="col" className="w-24 px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">图片</th>
+                <th scope="col" className="w-40 px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">产品型号</th>
+                <th scope="col" className="w-24 px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">材质</th>
+                <th scope="col" className="w-32 px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">供应商</th>
+                <th scope="col" className="w-32 px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">规格 / 尺寸</th>
+                <th scope="col" className="w-28 px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">价格</th>
+                <th scope="col" className="w-28 px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">创建信息</th>
+                <th scope="col" className="w-32 px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">操作</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-slate-200">
+              {filteredProducts.length === 0 ? (
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
-                      checked={selectedIds.length === filteredProducts.length && filteredProducts.length > 0}
-                      onChange={toggleSelectAll}
-                    />
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ID</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">图片</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">产品型号</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">材质</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">供应商</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">规格 / 尺寸</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">价格</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">创建信息</th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">操作</th>
+                  <td colSpan={10} className="px-6 py-12 text-center text-slate-500">
+                    <Package2 className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+                    <p>暂无产品数据</p>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-slate-200">
-                {filteredProducts.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
-                      <Package2 className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-                      <p>暂无产品数据</p>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredProducts.flatMap((p) => 
-                    p.skus.map((sku: any, skuIndex: number) => (
-                      <tr 
-                        key={`${p.id}-${skuIndex}`} 
-                        className="hover:bg-slate-50 transition-colors cursor-default"
-                        onDoubleClick={() => setViewingProduct(p)}
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap" onDoubleClick={(e) => e.stopPropagation()}>
-                          {skuIndex === 0 && (
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
-                              checked={selectedIds.includes(p.id)}
-                              onChange={() => toggleSelect(p.id)}
-                            />
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{p.id}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            {sku.main_image ? (
-                              <img src={sku.main_image} alt="SKU图" onClick={() => setPreviewImage(sku.main_image)} className="h-10 w-10 rounded object-cover cursor-pointer hover:opacity-80 border border-slate-200" />
-                            ) : (
-                              <div className="h-10 w-10 rounded bg-slate-100 flex items-center justify-center text-slate-400 border border-slate-200"><ImageIcon className="w-4 h-4"/></div>
-                            )}
-                            {sku.size_image ? (
-                              <img src={sku.size_image} alt="尺寸图" onClick={() => setPreviewImage(sku.size_image)} className="h-10 w-10 rounded object-cover cursor-pointer hover:opacity-80 border border-slate-200" />
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <div className="text-sm font-medium text-slate-900">{p.model}</div>
-                            {p.catalog_path && (
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); openDirectory(p.catalog_path); }}
-                                className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors"
-                                title={`打开目录: ${p.catalog_path}`}
-                              >
-                                <FolderOpen className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                          <div className="text-xs text-slate-500">{sku.spec || '默认规格'}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-slate-900">{p.material || '-'}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {p.suppliers && p.suppliers.length > 0 ? (
-                            <div className="group relative inline-block">
-                              <span className="text-sm text-slate-600 border-b border-dotted border-slate-400 cursor-help flex items-center gap-1">
-                                {p.suppliers.map((s: any) => s.name).join(", ")}
-                                <Info className="w-3 h-3 text-slate-400" />
-                              </span>
-                              <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-64 p-3 bg-slate-900 text-white text-xs rounded-lg shadow-xl animate-in fade-in slide-in-from-bottom-2">
-                                <div className="space-y-3">
-                                  {p.suppliers.map((s: any, idx: number) => (
-                                    <div key={s.id} className={idx > 0 ? "pt-2 border-t border-slate-700" : ""}>
-                                      <p className="font-bold pb-1 mb-1 flex justify-between items-center">
-                                        <span>{s.name}</span>
-                                        {s.factory_model && <span className="text-[10px] bg-blue-900 text-blue-200 px-1.5 py-0.5 rounded">厂家型号: {s.factory_model}</span>}
-                                      </p>
-                                      <p className="flex items-center gap-2"><span className="text-slate-400">联系人:</span> {s.contact_person || '-'}</p>
-                                      <p className="flex items-center gap-2"><span className="text-slate-400">联系方式:</span> {s.contact_info || '-'}</p>
-                                      <p className="flex items-start gap-2"><span className="text-slate-400 shrink-0">地址:</span> <span className="break-words">{s.address || '-'}</span></p>
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="absolute left-4 top-full w-2 h-2 bg-slate-900 rotate-45 -mt-1"></div>
-                              </div>
-                            </div>
+              ) : (
+                filteredProducts.flatMap((p) => 
+                  p.skus.map((sku: any, skuIndex: number) => (
+                    <tr 
+                      key={`${p.id}-${skuIndex}`} 
+                      className="hover:bg-slate-50 transition-colors cursor-default"
+                      onDoubleClick={() => setViewingProduct(p)}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap" onDoubleClick={(e) => e.stopPropagation()}>
+                        {skuIndex === 0 && (
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
+                            checked={selectedIds.includes(p.id)}
+                            onChange={() => toggleSelect(p.id)}
+                          />
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 truncate">{p.id}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1">
+                          {sku.main_image ? (
+                            <img src={sku.main_image} alt="SKU图" onClick={() => setPreviewImage(sku.main_image)} className="h-8 w-8 rounded object-cover cursor-pointer hover:opacity-80 border border-slate-200" />
                           ) : (
-                            <span className="text-sm text-slate-400">-</span>
+                            <div className="h-8 w-8 rounded bg-slate-100 flex items-center justify-center text-slate-400 border border-slate-200"><ImageIcon className="w-3 h-3"/></div>
                           )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                          <div className="flex items-center gap-2">
-                            <span>{sku.size || '-'}</span>
-                          </div>
-                          <div className="text-xs text-slate-400">
-                            {sku.net_weight ? `${sku.net_weight}kg` : '-'} / {sku.packaged_weight ? `${sku.packaged_weight}kg` : '-'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                          <div>出厂: <span className="text-slate-900">¥{sku.factory_price || '-'}</span></div>
-                          <div className="text-xs text-slate-400">零售: ¥{sku.retail_price || '-'}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                          <div>{p.creator_name}</div>
-                          <div className="text-xs text-slate-400">{p.created_at?.split('T')[0]}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          {skuIndex === 0 && (
-                            <div className="flex justify-end items-center gap-3">
-                              {deleteConfirmId === p.id ? (
-                                <div className="flex items-center gap-2 bg-red-50 px-2 py-1 rounded border border-red-100">
-                                  <span className="text-[10px] text-red-600 font-medium">确认删除？</span>
-                                  <button 
-                                    onClick={() => { handleDelete(p.id); setDeleteConfirmId(null); }} 
-                                    className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded hover:bg-red-700"
-                                  >
-                                    确定
-                                  </button>
-                                  <button 
-                                    onClick={() => setDeleteConfirmId(null)} 
-                                    className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded hover:bg-slate-300"
-                                  >
-                                    取消
-                                  </button>
-                                </div>
-                              ) : (
-                                <>
-                                  <button onClick={() => setViewingProduct(p)} className="text-slate-600 hover:text-slate-900">查看</button>
-                                  <button onClick={() => { setEditingProduct(p); setIsProductModalOpen(true); }} className="text-blue-600 hover:text-blue-900">编辑</button>
-                                  {(user.role === 'admin' || user.id === p.created_by) && (
-                                    <button onClick={() => setDeleteConfirmId(p.id)} className="text-red-600 hover:text-red-900">删除</button>
-                                  )}
-                                </>
-                              )}
+                          {sku.size_image ? (
+                            <img src={sku.size_image} alt="尺寸图" onClick={() => setPreviewImage(sku.size_image)} className="h-8 w-8 rounded object-cover cursor-pointer hover:opacity-80 border border-slate-200" />
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap overflow-hidden">
+                        <div className="flex items-center gap-1">
+                          <div className="text-sm font-medium text-slate-900 truncate" title={p.model}>{p.model}</div>
+                          {p.catalog_path && (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); openDirectory(p.catalog_path); }}
+                              className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors flex-shrink-0"
+                              title={`打开目录: ${p.catalog_path.replace(/^file:\/\/\//, '')}`}
+                            >
+                              <FolderOpen className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 truncate" title={sku.spec || '默认规格'}>{sku.spec || '默认规格'}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-slate-900 truncate" title={p.material || '-'}>{p.material || '-'}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {p.suppliers && p.suppliers.length > 0 ? (
+                          <div className="group relative inline-block w-full">
+                            <span className="text-sm text-slate-600 border-b border-dotted border-slate-400 cursor-help flex items-center gap-1 truncate">
+                              {p.suppliers.map((s: any) => s.name).join(", ")}
+                              <Info className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                            </span>
+                            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-64 p-3 bg-slate-900 text-white text-xs rounded-lg shadow-xl animate-in fade-in slide-in-from-bottom-2">
+                              <div className="space-y-3">
+                                {p.suppliers.map((s: any, idx: number) => (
+                                  <div key={s.id} className={idx > 0 ? "pt-2 border-t border-slate-700" : ""}>
+                                    <p className="font-bold pb-1 mb-1 flex justify-between items-center">
+                                      <span>{s.name}</span>
+                                      {s.factory_model && <span className="text-[10px] bg-blue-900 text-blue-200 px-1.5 py-0.5 rounded">厂家型号: {s.factory_model}</span>}
+                                    </p>
+                                    <p className="flex items-center gap-2"><span className="text-slate-400">联系人:</span> {s.contact_person || '-'}</p>
+                                    <p className="flex items-center gap-2"><span className="text-slate-400">联系方式:</span> {s.contact_info || '-'}</p>
+                                    <p className="flex items-start gap-2"><span className="text-slate-400 shrink-0">地址:</span> <span className="break-words">{s.address || '-'}</span></p>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="absolute left-4 top-full w-2 h-2 bg-slate-900 rotate-45 -mt-1"></div>
                             </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                        <div className="truncate max-w-[120px]" title={sku.size || '-'}>{sku.size || '-'}</div>
+                        <div className="text-xs text-slate-400 truncate">
+                          {sku.net_weight ? `${sku.net_weight}kg` : '-'} / {sku.packaged_weight ? `${sku.packaged_weight}kg` : '-'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                        <div className="truncate" title={`出厂: ¥${sku.factory_price || '-'}`}>出厂: <span className="text-slate-900">¥{sku.factory_price || '-'}</span></div>
+                        <div className="text-xs text-slate-400 truncate" title={`零售: ¥${sku.retail_price || '-'}`}>零售: ¥{sku.retail_price || '-'}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                        <div className="truncate" title={p.creator_name}>{p.creator_name}</div>
+                        <div className="text-xs text-slate-400 truncate">{p.created_at?.split('T')[0]}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        {skuIndex === 0 && (
+                          <div className="flex justify-end items-center gap-2">
+                            {deleteConfirmId === p.id ? (
+                              <div className="flex items-center gap-1 bg-red-50 px-1 py-0.5 rounded border border-red-100">
+                                <span className="text-[10px] text-red-600 font-medium">确认？</span>
+                                <button 
+                                  onClick={() => { handleDelete(p.id); setDeleteConfirmId(null); }} 
+                                  className="text-[10px] bg-red-600 text-white px-1.5 py-0.5 rounded hover:bg-red-700"
+                                >
+                                  是
+                                </button>
+                                <button 
+                                  onClick={() => setDeleteConfirmId(null)} 
+                                  className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded hover:bg-slate-300"
+                                >
+                                  否
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <button onClick={() => setViewingProduct(p)} className="text-slate-600 hover:text-slate-900">查看</button>
+                                <button onClick={() => { setEditingProduct(p); setIsProductModalOpen(true); }} className="text-blue-600 hover:text-blue-900">编辑</button>
+                                {(user.role === 'admin' || user.id === p.created_by) && (
+                                  <button onClick={() => setDeleteConfirmId(p.id)} className="text-red-600 hover:text-red-900">删除</button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )
+              )}
+            </tbody>
+          </table>
         </div>
 
         {/* Mobile Card View */}
@@ -586,7 +610,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">图册目录</p>
-                  <p className="text-sm font-medium text-slate-900 truncate" title={viewingProduct.catalog_path}>{viewingProduct.catalog_path || '-'}</p>
+                  <p className="text-sm font-medium text-slate-900 truncate" title={viewingProduct.catalog_path.replace(/^file:\/\/\//, '')}>{viewingProduct.catalog_path.replace(/^file:\/\/\//, '') || '-'}</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">材质</p>
@@ -708,6 +732,19 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             loadProducts();
           }} 
         />
+      )}
+
+      {isBulkDeleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h3 className="text-lg font-medium text-slate-900 mb-4">确认删除</h3>
+            <p className="text-sm text-slate-500 mb-6">确定要删除选中的 {selectedIds.length} 个产品吗？此操作不可逆。</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setIsBulkDeleteConfirmOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50">取消</button>
+              <button onClick={confirmBulkDelete} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700">确定删除</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

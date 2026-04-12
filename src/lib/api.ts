@@ -26,11 +26,18 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
       window.location.reload();
       return;
     }
-    let errorMsg = 'API Error';
+    let errorMsg = `API Error: ${response.status} ${response.statusText}`;
     try {
-      const errData = await response.json();
-      errorMsg = errData.error || errorMsg;
-    } catch (e) {}
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        const errData = await response.json();
+        errorMsg = errData.error || errorMsg;
+      } else {
+        errorMsg = await response.text();
+      }
+    } catch (e) {
+      console.error("Error parsing error response:", e);
+    }
     throw new Error(errorMsg);
   }
 
