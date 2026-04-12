@@ -35,12 +35,15 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
   const [parsingProgress, setParsingProgress] = useState(0);
   
   // Step 1: File Data
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [headerRowIndex, setHeaderRowIndex] = useState<number>(1);
   const [excelHeaders, setExcelHeaders] = useState<string[]>([]);
   const [validRowIndices, setValidRowIndices] = useState<number[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const workbookRef = useRef<ExcelJS.Workbook | null>(null);
   const worksheetRef = useRef<ExcelJS.Worksheet | null>(null);
   const imagesRef = useRef<any[]>([]);
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Step 2: Mapping
   const [mapping, setMapping] = useState<Record<string, string>>({}); // excelHeader -> productFieldKey
@@ -82,41 +85,56 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
       workbookRef.current = wb;
       worksheetRef.current = ws;
       imagesRef.current = ws.getImages();
+      
+      setSelectedFile(file);
+      setParsingProgress(100);
+    } catch (error) {
+      console.error("Error parsing Excel:", error);
+      alert("解析Excel文件失败，请确保文件格式正确。");
+    } finally {
+      setIsParsing(false);
+      setParsingProgress(0);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
-      // Extract headers
+  const handleParseExcel = () => {
+    const ws = worksheetRef.current;
+    if (!ws) return;
+
+    setIsParsing(true);
+    
+    try {
       const headers: string[] = [];
-      const firstRow = ws.getRow(1);
-      firstRow.eachCell((cell, colNumber) => {
+      const headerRow = ws.getRow(headerRowIndex);
+      headerRow.eachCell((cell, colNumber) => {
         headers[colNumber - 1] = cell.text;
       });
 
-      setParsingProgress(70);
-
       const indices: number[] = [];
       ws.eachRow((row, rowNumber) => {
-        if (rowNumber > 1) {
-          // Check if row has any actual data
+        if (rowNumber > headerRowIndex) {
           let hasData = false;
           row.eachCell((cell) => {
             if (cell.value !== null && cell.value !== undefined && cell.value !== '') {
               hasData = true;
             }
           });
-          // Also check if there's an image in this row
-          const hasImage = imagesRef.current.some(img => Math.floor(img.range.tl.row) === rowNumber - 1);
+          const hasImage = imagesRef.current.some(img => {
+            const tl = img.range.tl;
+            const r = tl.nativeRow !== undefined ? tl.nativeRow : Math.floor(tl.row);
+            return r === rowNumber - 1;
+          });
           if (hasData || hasImage) {
             indices.push(rowNumber);
           }
         }
       });
 
-      setParsingProgress(100);
-
       if (headers.length > 0 && indices.length > 0) {
         setExcelHeaders(headers);
         setValidRowIndices(indices);
         
-        // Auto-map if names match
         const autoMapping: Record<string, string> = {};
         headers.forEach(h => {
           if (!h) return;
@@ -128,15 +146,13 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
         setMapping(autoMapping);
         setStep(2);
       } else {
-        alert("未找到有效数据");
+        alert("未找到有效数据或表头");
       }
     } catch (error) {
-      console.error("Error parsing Excel:", error);
-      alert("解析Excel文件失败，请确保文件格式正确。");
+      console.error("Error extracting data:", error);
+      alert("提取数据失败");
     } finally {
       setIsParsing(false);
-      setParsingProgress(0);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -284,6 +300,46 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
     } catch (error) {
       console.error('Upload error:', error);
       alert('图片上传失败');
+    }
+  };
+
+  const handlePasteImage = async (type: 'main' | 'size') => {
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.read) {
+        throw new Error("Clipboard API not supported");
+      }
+      const clipboardItems = await navigator.clipboard.read();
+      let pasted = false;
+      for (const clipboardItem of clipboardItems) {
+        const imageTypes = clipboardItem.types.filter(t => t.startsWith('image/'));
+        for (const imageType of imageTypes) {
+          const blob = await clipboardItem.getType(imageType);
+          const file = new File([blob], `pasted-${Date.now()}.png`, { type: imageType });
+          await handleImageUpload(file, type);
+          pasted = true;
+          break;
+        }
+        if (pasted) break;
+      }
+      if (!pasted) {
+        alert("剪贴板中没有图片，请先复制一张图片。");
+      }
+    } catch (err) {
+      console.error("Paste error:", err);
+      alert("无法读取剪贴板，请确保已授予权限，或者选中框后使用快捷键 Ctrl+V / Cmd+V 粘贴。");
+    }
+  };
+
+  const handleImageClick = (type: 'main' | 'size') => {
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = null;
+      document.getElementById(`${type}-image-upload`)?.click();
+    } else {
+      clickTimeoutRef.current = setTimeout(() => {
+        clickTimeoutRef.current = null;
+        handlePasteImage(type);
+      }, 250);
     }
   };
 
@@ -440,6 +496,45 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
                 <div className="w-full max-w-md bg-slate-200 rounded-full h-2.5 mb-4 overflow-hidden">
                   <div className="bg-green-600 h-2.5 rounded-full transition-all duration-300 ease-out" style={{ width: `${parsingProgress}%` }}></div>
                 </div>
+              ) : selectedFile ? (
+                <div className="w-full max-w-md flex flex-col items-center">
+                  <div className="bg-white border border-slate-200 rounded-lg p-4 w-full mb-6 shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <FileSpreadsheet className="w-8 h-8 text-green-600 flex-shrink-0" />
+                      <div className="truncate">
+                        <p className="text-sm font-medium text-slate-900 truncate">{selectedFile.name}</p>
+                        <p className="text-xs text-slate-500">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        setSelectedFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
+                      className="text-slate-400 hover:text-red-500 p-1"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  
+                  <div className="w-full mb-6">
+                    <label className="block text-sm font-medium text-slate-700 mb-2 text-center">
+                      请确认表头（列名）在第几行？
+                    </label>
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-slate-500">第</span>
+                      <input 
+                        type="number" 
+                        min="1" 
+                        value={headerRowIndex}
+                        onChange={(e) => setHeaderRowIndex(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-20 px-3 py-2 border border-slate-300 rounded-md text-center focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <span className="text-slate-500">行</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2 text-center">通常表头在第1行，如果您的表格顶部有标题说明，请修改此数字。</p>
+                  </div>
+                </div>
               ) : (
                 <>
                   <input
@@ -551,46 +646,74 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-xs text-slate-500 mb-2">主图</p>
-                      <div className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50 relative overflow-hidden group">
+                      <div 
+                        tabIndex={0}
+                        className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50 relative overflow-hidden group cursor-pointer focus:ring-2 focus:ring-blue-500 outline-none"
+                        onClick={() => handleImageClick('main')}
+                        onPaste={(e) => {
+                          const items = e.clipboardData?.items;
+                          if (!items) return;
+                          for (let i = 0; i < items.length; i++) {
+                            if (items[i].type.indexOf('image') !== -1) {
+                              const file = items[i].getAsFile();
+                              if (file) handleImageUpload(file, 'main');
+                              break;
+                            }
+                          }
+                        }}
+                        title="单击粘贴图片，双击上传或更换图片"
+                      >
                         {mainImage ? (
                           <>
                             <img src={mainImage} alt="Main" className="w-full h-full object-cover" />
                             <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <label className="cursor-pointer text-white text-sm font-medium">
-                                更换
-                                <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'main')} />
-                              </label>
+                              <span className="text-white text-sm font-medium">单击粘贴 / 双击更换</span>
                             </div>
                           </>
                         ) : (
-                          <label className="cursor-pointer flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors">
-                            <Plus className="w-6 h-6 mb-1" />
-                            <span className="text-xs">上传主图</span>
-                            <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'main')} />
-                          </label>
+                          <div className="flex flex-col items-center justify-center w-full h-full text-slate-400 group-hover:text-blue-500 group-hover:bg-blue-50 transition-colors">
+                            <ImageIcon className="w-6 h-6 mb-1" />
+                            <span className="text-xs">单击粘贴</span>
+                            <span className="text-xs">双击上传</span>
+                          </div>
                         )}
+                        <input id="main-image-upload" type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'main')} />
                       </div>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500 mb-2">规格图</p>
-                      <div className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50 relative overflow-hidden group">
+                      <div 
+                        tabIndex={0}
+                        className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50 relative overflow-hidden group cursor-pointer focus:ring-2 focus:ring-blue-500 outline-none"
+                        onClick={() => handleImageClick('size')}
+                        onPaste={(e) => {
+                          const items = e.clipboardData?.items;
+                          if (!items) return;
+                          for (let i = 0; i < items.length; i++) {
+                            if (items[i].type.indexOf('image') !== -1) {
+                              const file = items[i].getAsFile();
+                              if (file) handleImageUpload(file, 'size');
+                              break;
+                            }
+                          }
+                        }}
+                        title="单击粘贴图片，双击上传或更换图片"
+                      >
                         {sizeImage ? (
                           <>
                             <img src={sizeImage} alt="Size" className="w-full h-full object-cover" />
                             <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <label className="cursor-pointer text-white text-sm font-medium">
-                                更换
-                                <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'size')} />
-                              </label>
+                              <span className="text-white text-sm font-medium">单击粘贴 / 双击更换</span>
                             </div>
                           </>
                         ) : (
-                          <label className="cursor-pointer flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors">
-                            <Plus className="w-6 h-6 mb-1" />
-                            <span className="text-xs">上传规格图</span>
-                            <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'size')} />
-                          </label>
+                          <div className="flex flex-col items-center justify-center w-full h-full text-slate-400 group-hover:text-blue-500 group-hover:bg-blue-50 transition-colors">
+                            <ImageIcon className="w-6 h-6 mb-1" />
+                            <span className="text-xs">单击粘贴</span>
+                            <span className="text-xs">双击上传</span>
+                          </div>
                         )}
+                        <input id="size-image-upload" type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], 'size')} />
                       </div>
                     </div>
                   </div>
@@ -602,10 +725,19 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
 
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-between items-center">
           {step === 1 ? (
-            <div className="w-full flex justify-end">
+            <div className="w-full flex justify-between">
               <button onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">
                 取消
               </button>
+              {selectedFile && (
+                <button 
+                  onClick={handleParseExcel}
+                  disabled={isParsing}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  下一步 <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
             </div>
           ) : step === 2 ? (
             <>
@@ -621,13 +753,22 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
             </>
           ) : (
             <>
-              <button 
-                onClick={() => handleRowAction('skip')}
-                disabled={loading}
-                className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
-              >
-                跳过此行
-              </button>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setStep(2)}
+                  disabled={loading}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                >
+                  返回上一步
+                </button>
+                <button 
+                  onClick={() => handleRowAction('skip')}
+                  disabled={loading}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                >
+                  跳过此行
+                </button>
+              </div>
               <button 
                 onClick={() => handleRowAction('confirm')}
                 disabled={loading}
