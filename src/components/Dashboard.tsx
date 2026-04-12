@@ -588,7 +588,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">供应商信息</p>
                   {viewingProduct.suppliers && viewingProduct.suppliers.length > 0 ? (
                     <div className="space-y-3">
-                      {viewingProduct.suppliers.map((s: any) => (
+                      {viewingProduct.suppliers?.map((s: any) => (
                         <div key={s.id} className="text-sm font-medium text-slate-900">
                           <p>{s.name}</p>
                           <div className="mt-1 text-xs text-slate-500 space-y-0.5">
@@ -610,7 +610,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">图册目录</p>
-                  <p className="text-sm font-medium text-slate-900 truncate" title={viewingProduct.catalog_path.replace(/^file:\/\/\//, '')}>{viewingProduct.catalog_path.replace(/^file:\/\/\//, '') || '-'}</p>
+                  <p className="text-sm font-medium text-slate-900 truncate" title={viewingProduct.catalog_path?.replace(/^file:\/\/\//, '')}>{viewingProduct.catalog_path?.replace(/^file:\/\/\//, '') || '-'}</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">材质</p>
@@ -618,7 +618,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 </div>
               </div>
 
-              {viewingProduct.skus.map((sku: any, idx: number) => (
+              {viewingProduct.skus?.map((sku: any, idx: number) => (
                 <div key={idx} className="border border-slate-200 rounded-xl p-6 space-y-6 bg-white shadow-sm">
                   <div className="flex flex-wrap gap-6 items-start">
                     <div className="space-y-4">
