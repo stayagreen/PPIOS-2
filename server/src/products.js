@@ -82,10 +82,10 @@ export function createProduct(data, userId) {
 
     const skuStmt = db.prepare(`
       INSERT INTO product_skus (
-        product_id, spec, size, net_weight, packaged_weight, factory_price, 
+        product_id, spec, size, material, net_weight, packaged_weight, factory_price, 
         retail_price, light_source_spec, light_source_count, 
         remark, main_image, size_image, other_images, other_files
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const sku of skus) {
@@ -93,6 +93,7 @@ export function createProduct(data, userId) {
         productId,
         sku.spec || null,
         sku.size || null,
+        sku.material || null,
         sku.net_weight || null,
         sku.packaged_weight || null,
         sku.factory_price || null,
@@ -163,10 +164,10 @@ export function updateProduct(id, data, userId, role) {
 
     const skuStmt = db.prepare(`
       INSERT INTO product_skus (
-        product_id, spec, size, net_weight, packaged_weight, factory_price, 
+        product_id, spec, size, material, net_weight, packaged_weight, factory_price, 
         retail_price, light_source_spec, light_source_count, 
         remark, main_image, size_image, other_images, other_files
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const sku of skus) {
@@ -174,6 +175,7 @@ export function updateProduct(id, data, userId, role) {
         productId,
         sku.spec || null,
         sku.size || null,
+        sku.material || null,
         sku.net_weight || null,
         sku.packaged_weight || null,
         sku.factory_price || null,

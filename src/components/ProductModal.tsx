@@ -13,6 +13,7 @@ interface SkuData {
   id?: number;
   spec: string;
   size: string;
+  material?: string;
   net_weight: string;
   packaged_weight: string;
   factory_price: string;
@@ -88,7 +89,6 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
   const [loading, setLoading] = useState(false);
   const [model, setModel] = useState('');
   const [catalogPath, setCatalogPath] = useState('');
-  const [material, setMaterial] = useState('');
   const [selectedSuppliers, setSelectedSuppliers] = useState<{ id: number, name: string, factory_model: string }[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
@@ -103,6 +103,7 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
     light_source_spec: '',
     light_source_count: '',
     remark: '',
+    material: '',
     main_image: '',
     size_image: '',
     other_images: [],
@@ -116,7 +117,6 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
     if (product) {
       setModel(product.model || '');
       setCatalogPath(product.catalog_path || '');
-      setMaterial(product.material || '');
       if (product.suppliers) {
         setSelectedSuppliers(product.suppliers.map((s: any) => ({
           id: s.id,
@@ -135,6 +135,7 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
           retail_price: s.retail_price?.toString() || '',
           light_source_spec: s.light_source_spec || '',
           light_source_count: s.light_source_count?.toString() || '',
+          material: s.material || '',
           remark: s.remark || '',
           main_image: s.main_image || '',
           size_image: s.size_image || '',
@@ -240,7 +241,6 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
       const payload = {
         model,
         catalog_path: catalogPath,
-        material,
         suppliers: selectedSuppliers.map(s => ({
           id: s.id,
           factory_model: s.factory_model
@@ -347,15 +347,6 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">产品材质</label>
-                <input 
-                  value={material} 
-                  onChange={e => setMaterial(e.target.value)} 
-                  placeholder="例如: 铁+铝+亚克力"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-sm" 
-                />
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">产品图册目录</label>
                 <div className="flex gap-2">
                   <input 
@@ -434,6 +425,13 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
                         <button type="button" onClick={() => applyToAll('size')} className="text-[10px] text-blue-500 hover:text-blue-700 flex items-center gap-0.5" title="应用到所有规格"><Copy className="w-3 h-3" /> 应用</button>
                       </div>
                       <input value={sku.size} onChange={e => handleSkuChange(index, 'size', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white" />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-sm font-medium text-slate-700">材质</label>
+                        <button type="button" onClick={() => applyToAll('material')} className="text-[10px] text-blue-500 hover:text-blue-700 flex items-center gap-0.5" title="应用到所有规格"><Copy className="w-3 h-3" /> 应用</button>
+                      </div>
+                      <input value={sku.material || ''} onChange={e => handleSkuChange(index, 'material', e.target.value)} placeholder="例如: 铁+铝+亚克力" className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white" />
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-1">

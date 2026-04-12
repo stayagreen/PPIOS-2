@@ -46,6 +46,7 @@ db.exec(`
     product_id INTEGER NOT NULL,
     spec TEXT,
     size TEXT,
+    material TEXT,
     net_weight REAL,
     packaged_weight REAL,
     factory_price REAL,
@@ -137,7 +138,7 @@ try {
   console.error("Migration failed:", e);
 }
 
-// Migration: Add other_images and other_files to product_skus if they don't exist
+// Migration: Add other_images, other_files, and material to product_skus if they don't exist
 const columns = db.prepare("PRAGMA table_info(product_skus)").all();
 const columnNames = columns.map((c) => c.name);
 if (!columnNames.includes("other_images")) {
@@ -145,6 +146,9 @@ if (!columnNames.includes("other_images")) {
 }
 if (!columnNames.includes("other_files")) {
   db.exec("ALTER TABLE product_skus ADD COLUMN other_files TEXT");
+}
+if (!columnNames.includes("material")) {
+  db.exec("ALTER TABLE product_skus ADD COLUMN material TEXT");
 }
 
 const defaultSettings = {
