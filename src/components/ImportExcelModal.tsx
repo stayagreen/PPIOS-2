@@ -25,6 +25,7 @@ const PRODUCT_FIELDS = [
   { key: 'light_source_count', label: '光源数量', type: 'sku' },
   { key: 'remark', label: '备注', type: 'sku' },
   { key: 'main_image', label: 'SKU主图', type: 'sku' },
+  { key: 'size_image', label: '规格图', type: 'sku' },
 ];
 
 export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModalProps) {
@@ -35,8 +36,11 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
   
   // Step 1: File Data
   const [excelHeaders, setExcelHeaders] = useState<string[]>([]);
-  const [excelData, setExcelData] = useState<any[]>([]);
+  const [validRowIndices, setValidRowIndices] = useState<number[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const workbookRef = useRef<ExcelJS.Workbook | null>(null);
+  const worksheetRef = useRef<ExcelJS.Worksheet | null>(null);
+  const imagesRef = useRef<any[]>([]);
 
   // Step 2: Mapping
   const [mapping, setMapping] = useState<Record<string, string>>({}); // excelHeader -> productFieldKey
@@ -75,6 +79,10 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
       const ws = wb.worksheets[0];
       if (!ws) throw new Error("No worksheet found");
 
+      workbookRef.current = wb;
+      worksheetRef.current = ws;
+      imagesRef.current = ws.getImages();
+
       // Extract headers
       const headers: string[] = [];
       const firstRow = ws.getRow(1);
@@ -82,80 +90,31 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
         headers[colNumber - 1] = cell.text;
       });
 
-      // Extract images
-      const images = ws.getImages();
-      const imageMap = new Map<string, string>(); // key: "row,col", value: base64 data URL
-      
-      const arrayBufferToBase64 = (buffer: ArrayBuffer | Uint8Array) => {
-        let binary = '';
-        const bytes = new Uint8Array(buffer);
-        const len = bytes.byteLength;
-        for (let i = 0; i < len; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        return window.btoa(binary);
-      };
-
-      for (const img of images) {
-        const media = wb.getImage(img.imageId as any);
-        if (media) {
-          const row = Math.floor(img.range.tl.row);
-          const col = Math.floor(img.range.tl.col);
-          let base64 = '';
-          if (media.base64) {
-            base64 = media.base64;
-            // Ensure it has data URI prefix
-            if (!base64.startsWith('data:image')) {
-              base64 = `data:image/${media.extension || 'png'};base64,${base64}`;
-            }
-          } else if (media.buffer) {
-            const b64 = arrayBufferToBase64(media.buffer as any);
-            base64 = `data:image/${media.extension || 'png'};base64,${b64}`;
-          }
-          
-          if (base64) {
-            imageMap.set(`${row},${col}`, base64);
-          }
-        }
-      }
-
       setParsingProgress(70);
 
-      // Extract data
-      const rows: any[] = [];
+      const indices: number[] = [];
       ws.eachRow((row, rowNumber) => {
-        if (rowNumber === 1) return; // Skip header
-        
-        const rowData: any = {};
-        let hasData = false;
-        
-        headers.forEach((header, colIndex) => {
-          if (!header) return;
-          
-          const cell = row.getCell(colIndex + 1);
-          let value = cell.text;
-          
-          const imgBase64 = imageMap.get(`${rowNumber - 1},${colIndex}`);
-          if (imgBase64) {
-            value = imgBase64;
+        if (rowNumber > 1) {
+          // Check if row has any actual data
+          let hasData = false;
+          row.eachCell((cell) => {
+            if (cell.value !== null && cell.value !== undefined && cell.value !== '') {
+              hasData = true;
+            }
+          });
+          // Also check if there's an image in this row
+          const hasImage = imagesRef.current.some(img => Math.floor(img.range.tl.row) === rowNumber - 1);
+          if (hasData || hasImage) {
+            indices.push(rowNumber);
           }
-          
-          if (value) {
-            rowData[header] = value;
-            hasData = true;
-          }
-        });
-        
-        if (hasData) {
-          rows.push(rowData);
         }
       });
 
       setParsingProgress(100);
 
-      if (rows.length > 0) {
-        setExcelHeaders(headers.filter(Boolean));
-        setExcelData(rows);
+      if (headers.length > 0 && indices.length > 0) {
+        setExcelHeaders(headers);
+        setValidRowIndices(indices);
         
         // Auto-map if names match
         const autoMapping: Record<string, string> = {};
@@ -182,7 +141,7 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
   };
 
   const handleMappingNext = () => {
-    if (excelData.length === 0) {
+    if (validRowIndices.length === 0) {
       alert("没有可导入的数据");
       return;
     }
@@ -206,12 +165,67 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
   const prepareRowData = async (index: number) => {
     setLoading(true);
     try {
-      const rawRow = excelData[index];
+      const ws = worksheetRef.current;
+      const wb = workbookRef.current;
+      if (!ws || !wb) return;
+
+      const rowNumber = validRowIndices[index];
+      const row = ws.getRow(rowNumber);
+      
       const mappedData: any = {};
       
-      Object.entries(mapping).forEach(([excelHeader, fieldKey]) => {
-        if (fieldKey && rawRow[excelHeader] !== undefined) {
-          mappedData[fieldKey as string] = rawRow[excelHeader];
+      const arrayBufferToBase64 = (buffer: ArrayBuffer | Uint8Array) => {
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary);
+      };
+
+      excelHeaders.forEach((excelHeader, colIndex) => {
+        if (!excelHeader) return;
+        const fieldKey = mapping[excelHeader];
+        if (fieldKey) {
+          const cell = row.getCell(colIndex + 1);
+          let value = '';
+          try {
+            value = cell.text;
+          } catch (e) {
+            value = cell.value ? String(cell.value) : '';
+          }
+
+          // Check for image
+          const img = imagesRef.current.find(i => {
+            const tl = i.range.tl;
+            const r = tl.nativeRow !== undefined ? tl.nativeRow : Math.floor(tl.row);
+            const c = tl.nativeCol !== undefined ? tl.nativeCol : Math.floor(tl.col);
+            return r === rowNumber - 1 && c === colIndex;
+          });
+
+          if (img) {
+            const media = wb.getImage(img.imageId as any);
+            if (media) {
+              let base64 = '';
+              if (media.base64) {
+                base64 = media.base64;
+                if (!base64.startsWith('data:image')) {
+                  base64 = `data:image/${media.extension || 'png'};base64,${base64}`;
+                }
+              } else if (media.buffer) {
+                const b64 = arrayBufferToBase64(media.buffer as any);
+                base64 = `data:image/${media.extension || 'png'};base64,${b64}`;
+              }
+              if (base64) {
+                value = base64;
+              }
+            }
+          }
+
+          if (value) {
+            mappedData[fieldKey] = value;
+          }
         }
       });
 
@@ -232,11 +246,31 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
           console.error("Failed to upload excel image", e);
           setMainImage('');
         }
+      } else if (mappedData.main_image && mappedData.main_image.startsWith('http')) {
+        setMainImage(mappedData.main_image);
       } else {
-        setMainImage(mappedData.main_image || '');
+        setMainImage('');
+      }
+
+      if (mappedData.size_image && mappedData.size_image.startsWith('data:image')) {
+        try {
+          const file = dataURLtoFile(mappedData.size_image, `excel-size-img-${index}.png`);
+          const url = await uploadImage(file);
+          setSizeImage(url);
+        } catch (e) {
+          console.error("Failed to upload excel size image", e);
+          setSizeImage('');
+        }
+      } else if (mappedData.size_image && mappedData.size_image.startsWith('http')) {
+        setSizeImage(mappedData.size_image);
+      } else {
+        setSizeImage('');
       }
       
       setCurrentRowIndex(index);
+    } catch (error) {
+      console.error("Error preparing row data:", error);
+      alert("读取行数据失败");
     } finally {
       setLoading(false);
     }
@@ -262,7 +296,7 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
       setProcessedRows([...processedRows, { ...currentRowData, main_image: mainImage, size_image: sizeImage }]);
     }
 
-    if (currentRowIndex < excelData.length - 1) {
+    if (currentRowIndex < validRowIndices.length - 1) {
       prepareRowData(currentRowIndex + 1);
     } else {
       submitImport(action === 'confirm' ? [...processedRows, { ...currentRowData, main_image: mainImage, size_image: sizeImage }] : processedRows);
@@ -469,83 +503,46 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
             <div>
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h4 className="text-lg font-medium text-slate-900">数据确认 ({currentRowIndex + 1} / {excelData.length})</h4>
+                  <h4 className="text-lg font-medium text-slate-900">数据确认 ({currentRowIndex + 1} / {validRowIndices.length})</h4>
                   <p className="text-sm text-slate-500">请确认并完善当前行的数据，您可以修改型号或上传图片。</p>
                 </div>
                 <div className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                  进度: {Math.round(((currentRowIndex) / excelData.length) * 100)}%
+                  进度: {Math.round(((currentRowIndex) / validRowIndices.length) * 100)}%
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">产品型号 <span className="text-red-500">*</span></label>
-                    <input
-                      type="text"
-                      value={currentRowData.model || ''}
-                      onChange={(e) => setCurrentRowData({ ...currentRowData, model: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      list="existing-models"
-                    />
-                    <datalist id="existing-models">
-                      {existingProducts.map(p => (
-                        <option key={p.id} value={p.model} />
-                      ))}
-                    </datalist>
-                    <p className="text-xs text-slate-500 mt-1">相同型号的数据将作为同一产品的不同规格(SKU)导入。</p>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">规格名称</label>
-                      <input
-                        type="text"
-                        value={currentRowData.spec || ''}
-                        onChange={(e) => setCurrentRowData({ ...currentRowData, spec: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-md"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">尺寸</label>
-                      <input
-                        type="text"
-                        value={currentRowData.size || ''}
-                        onChange={(e) => setCurrentRowData({ ...currentRowData, size: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-md"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">材质</label>
-                    <input
-                      type="text"
-                      value={currentRowData.material || ''}
-                      onChange={(e) => setCurrentRowData({ ...currentRowData, material: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">出厂价</label>
-                      <input
-                        type="number"
-                        value={currentRowData.factory_price || ''}
-                        onChange={(e) => setCurrentRowData({ ...currentRowData, factory_price: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-md"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">供应商</label>
-                      <input
-                        type="text"
-                        value={currentRowData.supplier_name || ''}
-                        onChange={(e) => setCurrentRowData({ ...currentRowData, supplier_name: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-md"
-                      />
-                    </div>
+                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {PRODUCT_FIELDS.filter(f => f.key !== 'main_image' && f.key !== 'size_image').map(field => {
+                      const isMapped = Object.values(mapping).includes(field.key);
+                      if (!isMapped && field.key !== 'model') return null;
+                      
+                      return (
+                        <div key={field.key} className={field.key === 'model' ? 'col-span-1 md:col-span-2' : ''}>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">
+                            {field.label} {field.required && <span className="text-red-500">*</span>}
+                          </label>
+                          <input
+                            type={field.key.includes('price') || field.key.includes('weight') || field.key.includes('count') ? 'number' : 'text'}
+                            value={currentRowData[field.key] || ''}
+                            onChange={(e) => setCurrentRowData({ ...currentRowData, [field.key]: e.target.value })}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                            {...(field.key === 'model' ? { list: 'existing-models' } : {})}
+                          />
+                          {field.key === 'model' && (
+                            <>
+                              <datalist id="existing-models">
+                                {existingProducts.map(p => (
+                                  <option key={p.id} value={p.model} />
+                                ))}
+                              </datalist>
+                              <p className="text-xs text-slate-500 mt-1">相同型号的数据将作为同一产品的不同规格(SKU)导入。</p>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -636,7 +633,7 @@ export default function ImportExcelModal({ onClose, onSuccess }: ImportExcelModa
                 disabled={loading}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
               >
-                {loading ? '处理中...' : currentRowIndex < excelData.length - 1 ? (
+                {loading ? '处理中...' : currentRowIndex < validRowIndices.length - 1 ? (
                   <>确认并下一行 <ArrowRight className="w-4 h-4" /></>
                 ) : (
                   <>确认并完成导入 <Check className="w-4 h-4" /></>
