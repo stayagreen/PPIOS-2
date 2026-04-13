@@ -28,7 +28,7 @@ interface SkuData {
 }
 
 interface OtherImageUploadProps {
-  onUpload: (file: File) => void;
+  onUpload: (files: FileList) => void;
 }
 
 function OtherImageUpload({ onUpload }: OtherImageUploadProps) {
@@ -41,9 +41,10 @@ function OtherImageUpload({ onUpload }: OtherImageUploadProps) {
           const input = document.createElement('input');
           input.type = 'file';
           input.accept = 'image/*';
+          input.multiple = true;
           input.onchange = (e: any) => {
-            const file = e.target.files?.[0];
-            if (file) onUpload(file);
+            const files = e.target.files;
+            if (files && files.length > 0) onUpload(files);
           };
           input.click();
         } else {
@@ -55,9 +56,10 @@ function OtherImageUpload({ onUpload }: OtherImageUploadProps) {
           const input = document.createElement('input');
           input.type = 'file';
           input.accept = 'image/*';
+          input.multiple = true;
           input.onchange = (e: any) => {
-            const file = e.target.files?.[0];
-            if (file) onUpload(file);
+            const files = e.target.files;
+            if (files && files.length > 0) onUpload(files);
           };
           input.click();
         }
@@ -66,14 +68,18 @@ function OtherImageUpload({ onUpload }: OtherImageUploadProps) {
         e.preventDefault();
         e.stopPropagation();
         const items = e.clipboardData.items;
+        const files: File[] = [];
         for (let i = 0; i < items.length; i++) {
           if (items[i].type.indexOf('image') !== -1) {
             const file = items[i].getAsFile();
-            if (file) {
-              onUpload(file);
-              break;
-            }
+            if (file) files.push(file);
           }
+        }
+        if (files.length > 0) {
+          // Mock FileList for consistency
+          const dataTransfer = new DataTransfer();
+          files.forEach(f => dataTransfer.items.add(f));
+          onUpload(dataTransfer.files);
         }
       }}
       tabIndex={0}
@@ -187,19 +193,26 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
     }
   };
 
-  const handleFileUpload = async (index: number, field: 'other_images' | 'other_files', file: File) => {
+  const handleFileUpload = async (index: number, field: 'other_images' | 'other_files', files: FileList) => {
     try {
-      const url = await uploadImage(file);
+      const uploadPromises = Array.from(files).map(file => uploadImage(file));
+      const urls = await Promise.all(uploadPromises);
+      
       setSkus(prev => {
         const newSkus = [...prev];
         const currentList = newSkus[index][field];
-        if (currentList.length >= 10) {
-          alert('最多只能添加10个');
-          return prev;
+        
+        // Filter out files that would exceed the limit
+        const remainingSlots = 10 - currentList.length;
+        const filesToAdd = urls.slice(0, remainingSlots);
+        
+        if (urls.length > remainingSlots) {
+          alert(`最多只能添加10个，已截断多余文件`);
         }
+        
         newSkus[index] = { 
           ...newSkus[index], 
-          [field]: [...currentList, url] 
+          [field]: [...currentList, ...filesToAdd] 
         };
         return newSkus;
       });
@@ -552,9 +565,10 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
                             onClick={() => {
                               const input = document.createElement('input');
                               input.type = 'file';
+                              input.multiple = true;
                               input.onchange = (e: any) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleFileUpload(index, 'other_files', file);
+                                const files = e.target.files;
+                                if (files && files.length > 0) handleFileUpload(index, 'other_files', files);
                               };
                               input.click();
                             }}
