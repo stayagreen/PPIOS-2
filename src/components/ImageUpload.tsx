@@ -10,6 +10,7 @@ interface ImageUploadProps {
 
 export default function ImageUpload({ label, value, onChange }: ImageUploadProps) {
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -22,13 +23,15 @@ export default function ImageUpload({ label, value, onChange }: ImageUploadProps
 
   const upload = async (file: File) => {
     setLoading(true);
+    setProgress(0);
     try {
-      const url = await uploadImage(file);
+      const url = await uploadImage(file, (p) => setProgress(p));
       onChange(url);
     } catch (err) {
       alert('上传失败');
     } finally {
       setLoading(false);
+      setProgress(0);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -80,10 +83,15 @@ export default function ImageUpload({ label, value, onChange }: ImageUploadProps
           }}
           onPaste={handlePaste}
           tabIndex={0}
-          className="h-32 w-32 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-500 hover:border-blue-500 hover:text-blue-500 cursor-pointer transition-colors bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-blue-50/30"
+          className="h-32 w-32 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center text-slate-500 hover:border-blue-500 hover:text-blue-500 cursor-pointer transition-colors bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-blue-50/30 relative"
         >
           {loading ? (
-            <Loader2 className="w-6 h-6 animate-spin" />
+            <div className="w-full px-2">
+              <div className="w-full bg-slate-200 rounded-full h-2">
+                <div className="bg-blue-600 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
+              </div>
+              <span className="text-[10px] text-center block mt-1">{progress}%</span>
+            </div>
           ) : (
             <>
               <UploadCloud className="w-6 h-6 mb-2 pointer-events-none" />

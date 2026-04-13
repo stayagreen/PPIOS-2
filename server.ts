@@ -36,9 +36,9 @@ async function startServer() {
 
   const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadDir),
-    filename: (req, file, cb) => cb(null, uuid() + "." + file.originalname.split(".").pop())
+    filename: (req, file, cb) => cb(null, Buffer.from(file.originalname, 'latin1').toString('utf8'))
   });
-  const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+  const upload = multer({ storage, limits: { fileSize: 300 * 1024 * 1024 } });
 
   function authMiddleware(req: any, res: any, next: any) {
     const token = req.headers.authorization?.replace("Bearer ", "");

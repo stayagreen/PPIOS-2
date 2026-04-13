@@ -68,12 +68,36 @@ export async function exportExcel(ids?: number[]) {
   URL.revokeObjectURL(url);
 }
 
-export async function uploadImage(file: File) {
-  const formData = new FormData();
-  formData.append('image', file);
-  const res = await fetchApi('/upload', {
-    method: 'POST',
-    body: formData,
+export async function uploadImage(file: File, onProgress?: (progress: number) => void) {
+  return new Promise<string>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/upload', true);
+    
+    const token = localStorage.getItem('token');
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    }
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        const progress = Math.round((event.loaded / event.total) * 100);
+        onProgress(progress);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        const res = JSON.parse(xhr.responseText);
+        resolve(res.url);
+      } else {
+        reject(new Error(xhr.responseText || '上传失败'));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('上传失败'));
+
+    const formData = new FormData();
+    formData.append('image', file);
+    xhr.send(formData);
   });
-  return res.url;
 }
