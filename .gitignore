@@ -4,6 +4,8 @@ dist/
 coverage/
 uploads/
 .superpowers/
+database.db
+server/database.db
 .DS_Store
 *.log
 .env*
