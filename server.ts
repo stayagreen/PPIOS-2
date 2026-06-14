@@ -23,7 +23,8 @@ const __dirname = dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 6000;
+  const BROWSER_PORT = Number(process.env.BROWSER_PORT) || 6001;
 
   const uploadDir = join(__dirname, "uploads");
   if (!fs.existsSync(uploadDir)) {
@@ -270,9 +271,15 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  app.listen(PORT, "::", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
+
+  if (BROWSER_PORT !== PORT) {
+    app.listen(BROWSER_PORT, "::", () => {
+      console.log(`Browser access available at http://localhost:${BROWSER_PORT}`);
+    });
+  }
 }
 
 startServer();

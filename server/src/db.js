@@ -151,6 +151,16 @@ if (!columnNames.includes("material")) {
   db.exec("ALTER TABLE product_skus ADD COLUMN material TEXT");
 }
 
+// Migration: Add main_images and detail_images to products if they don't exist
+const productColumns2 = db.prepare("PRAGMA table_info(products)").all();
+const productColumnNames2 = productColumns2.map((c) => c.name);
+if (!productColumnNames2.includes("main_images")) {
+  db.exec("ALTER TABLE products ADD COLUMN main_images TEXT");
+}
+if (!productColumnNames2.includes("detail_images")) {
+  db.exec("ALTER TABLE products ADD COLUMN detail_images TEXT");
+}
+
 const defaultSettings = {
   model_prefix: "PPIOS",
   model_start_number: "1001",

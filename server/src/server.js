@@ -162,7 +162,14 @@ app.put("/api/user/password", authMiddleware, (req, res) => {
   res.json({ success: true });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const PORT = process.env.PORT || 6000;
+const BROWSER_PORT = process.env.BROWSER_PORT || 6001;
+app.listen(PORT, "::", () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+if (BROWSER_PORT !== PORT) {
+  app.listen(BROWSER_PORT, "::", () => {
+    console.log(`Browser access available at http://localhost:${BROWSER_PORT}`);
+  });
+}

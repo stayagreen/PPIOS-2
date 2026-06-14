@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Package2, Search, Plus, Download, Settings, LogOut, Image as ImageIcon, X, FolderOpen, Eye, FileText, Users, Info, Upload, ChevronDown, FileSpreadsheet, Folder } from 'lucide-react';
 import { fetchApi, exportExcel } from '../lib/api';
-import ProductModal from './ProductModal';
 import SettingsModal from './SettingsModal';
 import SupplierManagement from './SupplierManagement';
 import ImportExcelModal from './ImportExcelModal';
@@ -9,17 +8,15 @@ import ImportExcelModal from './ImportExcelModal';
 interface DashboardProps {
   user: { id: number; username: string; role: string };
   onLogout: () => void;
+  onNavigate: (page: any) => void;
 }
 
-export default function Dashboard({ user, onLogout }: DashboardProps) {
+export default function Dashboard({ user, onLogout, onNavigate }: DashboardProps) {
   const [products, setProducts] = useState<any[]>([]);
   const [search, setSearch] = useState('');
-  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isImportDropdownOpen, setIsImportDropdownOpen] = useState(false);
   const [isImportExcelModalOpen, setIsImportExcelModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<any>(null);
-  const [viewingProduct, setViewingProduct] = useState<any>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = useState(false);
@@ -268,7 +265,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               {selectedIds.length > 0 ? `导出已选(${selectedIds.length})` : '导出全部'}
             </button>
             <button
-              onClick={() => { setEditingProduct(null); setIsProductModalOpen(true); }}
+              onClick={() => onNavigate({ type: 'product-new' })}
               className="flex-1 sm:flex-none inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
             >
               <Plus className="w-4 h-4 mr-2" />
@@ -315,7 +312,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     <tr 
                       key={`${p.id}-${skuIndex}`} 
                       className="hover:bg-slate-50 transition-colors cursor-default"
-                      onDoubleClick={() => setViewingProduct(p)}
+                      onDoubleClick={() => onNavigate({ type: 'product-detail', productId: p.id })}
                     >
                       <td className="px-6 py-4 whitespace-nowrap" onDoubleClick={(e) => e.stopPropagation()}>
                         {skuIndex === 0 && (
@@ -421,8 +418,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                               </div>
                             ) : (
                               <>
-                                <button onClick={() => setViewingProduct(p)} className="text-slate-600 hover:text-slate-900">查看</button>
-                                <button onClick={() => { setEditingProduct(p); setIsProductModalOpen(true); }} className="text-blue-600 hover:text-blue-900">编辑</button>
+                                <button onClick={() => onNavigate({ type: 'product-detail', productId: p.id })} className="text-slate-600 hover:text-slate-900">查看</button>
+                                <button onClick={() => onNavigate({ type: 'product-edit', productId: p.id })} className="text-blue-600 hover:text-blue-900">编辑</button>
                                 {(user.role === 'admin' || user.id === p.created_by) && (
                                   <button onClick={() => setDeleteConfirmId(p.id)} className="text-red-600 hover:text-red-900">删除</button>
                                 )}
@@ -451,7 +448,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               <div 
                 key={p.id} 
                 className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
-                onDoubleClick={() => setViewingProduct(p)}
+                onDoubleClick={() => onNavigate({ type: 'product-detail', productId: p.id })}
               >
                 <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between" onDoubleClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-3">
@@ -493,8 +490,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                       </div>
                     ) : (
                       <>
-                        <button onClick={() => setViewingProduct(p)} className="p-2 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">查看</button>
-                        <button onClick={() => { setEditingProduct(p); setIsProductModalOpen(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">编辑</button>
+                        <button onClick={() => onNavigate({ type: 'product-detail', productId: p.id })} className="p-2 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">查看</button>
+                        <button onClick={() => onNavigate({ type: 'product-edit', productId: p.id })} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">编辑</button>
                         {(user.role === 'admin' || user.id === p.created_by) && (
                           <button onClick={() => setDeleteConfirmId(p.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">删除</button>
                         )}
@@ -545,173 +542,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   </main>
 
       {/* Modals */}
-      {isProductModalOpen && (
-        <ProductModal
-          product={editingProduct}
-          onClose={() => setIsProductModalOpen(false)}
-          onSuccess={() => {
-            setIsProductModalOpen(false);
-            loadProducts();
-          }}
-        />
-      )}
-
       {isSettingsModalOpen && (
         <SettingsModal user={user} onClose={() => setIsSettingsModalOpen(false)} />
-      )}
-
-      {/* View Product Modal */}
-      {viewingProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center gap-4">
-                <h3 className="text-lg font-bold text-slate-900">查看产品详情 - {viewingProduct.model}</h3>
-                {viewingProduct.catalog_path && (
-                  <button 
-                    onClick={() => openDirectory(viewingProduct.catalog_path)}
-                    className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-medium hover:bg-blue-100 transition-colors"
-                  >
-                    <FolderOpen className="w-3.5 h-3.5" />
-                    打开图册目录
-                  </button>
-                )}
-              </div>
-              <button onClick={() => setViewingProduct(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
-                <X className="w-5 h-5 text-slate-500" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-8">
-              {/* Product Level Info */}
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">供应商信息</p>
-                  {viewingProduct.suppliers && viewingProduct.suppliers.length > 0 ? (
-                    <div className="space-y-3">
-                      {viewingProduct.suppliers?.map((s: any) => (
-                        <div key={s.id} className="text-sm font-medium text-slate-900">
-                          <p>{s.name}</p>
-                          <div className="mt-1 text-xs text-slate-500 space-y-0.5">
-                            <p>联系人: {s.contact_person || '-'}</p>
-                            <p>电话: {s.contact_info || '-'}</p>
-                            <p className="truncate" title={s.address}>地址: {s.address || '-'}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm font-medium text-slate-900">未设置</p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">创建信息</p>
-                  <p className="text-sm font-medium text-slate-900">{viewingProduct.creator_name}</p>
-                  <p className="text-xs text-slate-500">{new Date(viewingProduct.created_at).toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">图册目录</p>
-                  <p className="text-sm font-medium text-slate-900 truncate" title={viewingProduct.catalog_path?.replace(/^file:\/\/\//, '')}>{viewingProduct.catalog_path?.replace(/^file:\/\/\//, '') || '-'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">材质</p>
-                  <p className="text-sm font-medium text-slate-900">{viewingProduct.material || '-'}</p>
-                </div>
-              </div>
-
-              {viewingProduct.skus?.map((sku: any, idx: number) => (
-                <div key={idx} className="border border-slate-200 rounded-xl p-6 space-y-6 bg-white shadow-sm">
-                  <div className="flex flex-wrap gap-6 items-start">
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        {sku.main_image && (
-                          <div className="space-y-1">
-                            <p className="text-xs font-medium text-slate-500">主图</p>
-                            <div className="relative group cursor-zoom-in" onClick={() => setPreviewImage(sku.main_image)}>
-                              <img src={sku.main_image} alt="主图" className="h-32 w-32 object-cover rounded-lg border border-slate-200" />
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg text-white text-xs font-medium">点击放大</div>
-                            </div>
-                          </div>
-                        )}
-                        {sku.size_image && (
-                          <div className="space-y-1">
-                            <p className="text-xs font-medium text-slate-500">尺寸图</p>
-                            <div className="relative group cursor-zoom-in" onClick={() => setPreviewImage(sku.size_image)}>
-                              <img src={sku.size_image} alt="尺寸图" className="h-32 w-32 object-cover rounded-lg border border-slate-200" />
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg text-white text-xs font-medium">点击放大</div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-[240px] grid grid-cols-2 gap-x-8 gap-y-4">
-                      <div>
-                        <p className="text-xs font-medium text-slate-500">规格</p>
-                        <p className="text-sm text-slate-900">{sku.spec || '-'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-slate-500">尺寸</p>
-                        <p className="text-sm text-slate-900">{sku.size || '-'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-slate-500">净重 / 包装重量</p>
-                        <p className="text-sm text-slate-900">{sku.net_weight || '-'}kg / {sku.packaged_weight || '-'}kg</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-slate-500">价格 (出厂/零售)</p>
-                        <p className="text-sm text-slate-900">¥{sku.factory_price || '-'} / ¥{sku.retail_price || '-'}</p>
-                      </div>
-                      <div className="col-span-2">
-                        <p className="text-xs font-medium text-slate-500">光源信息</p>
-                        <p className="text-sm text-slate-900">{sku.light_source_spec || '-'} ({sku.light_source_count || '0'}个)</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {sku.other_images?.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-slate-500">其它图片</p>
-                      <div className="flex flex-wrap gap-3">
-                        {sku.other_images.map((img: string, i: number) => (
-                          <div key={i} className="relative group cursor-zoom-in" onClick={() => setPreviewImage(img)}>
-                            <img src={img} alt={`其它图片 ${i+1}`} className="h-20 w-20 object-cover rounded-lg border border-slate-200" />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg text-white text-[10px] font-medium">放大</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {sku.other_files?.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-slate-500">其它文件</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {sku.other_files.map((file: string, i: number) => (
-                          <div key={i} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-200 group">
-                            <div className="flex items-center gap-2 truncate">
-                              <FileText className="w-4 h-4 text-slate-400" />
-                              <span className="text-xs text-slate-600 truncate">{file.split('/').pop()}</span>
-                            </div>
-                            <a href={file} download target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 text-xs font-medium px-2 py-1">下载</a>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {sku.remark && (
-                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                      <p className="text-xs font-medium text-slate-500 mb-1">备注</p>
-                      <p className="text-sm text-slate-600 italic">{sku.remark}</p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end">
-              <button onClick={() => setViewingProduct(null)} className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50">关闭</button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Image Preview Modal */}

@@ -1,10 +1,19 @@
 import { useState, useEffect } from 'react';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
+import ProductForm from './components/ProductForm';
+import ProductDetail from './components/ProductDetail';
+
+export type Page = 
+  | { type: 'dashboard' }
+  | { type: 'product-new' }
+  | { type: 'product-edit', productId: number }
+  | { type: 'product-detail', productId: number };
 
 export default function App() {
   const [user, setUser] = useState<{id: number, username: string, role: string} | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState<Page>({ type: 'dashboard' });
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -30,6 +39,7 @@ export default function App() {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
     setUser(null);
+    setCurrentPage({ type: 'dashboard' });
   };
 
   if (loading) return null;
@@ -38,5 +48,34 @@ export default function App() {
     return <Auth onLogin={handleLogin} />;
   }
 
-  return <Dashboard user={user} onLogout={handleLogout} />;
+  switch (currentPage.type) {
+    case 'product-new':
+      return (
+        <ProductForm
+          user={user}
+          onClose={() => setCurrentPage({ type: 'dashboard' })}
+          onSuccess={() => setCurrentPage({ type: 'dashboard' })}
+        />
+      );
+    case 'product-edit':
+      return (
+        <ProductForm
+          user={user}
+          productId={currentPage.productId}
+          onClose={() => setCurrentPage({ type: 'dashboard' })}
+          onSuccess={() => setCurrentPage({ type: 'dashboard' })}
+        />
+      );
+    case 'product-detail':
+      return (
+        <ProductDetail
+          user={user}
+          productId={currentPage.productId}
+          onBack={() => setCurrentPage({ type: 'dashboard' })}
+          onEdit={() => setCurrentPage({ type: 'product-edit', productId: currentPage.productId })}
+        />
+      );
+    default:
+      return <Dashboard user={user} onLogout={handleLogout} onNavigate={setCurrentPage} />;
+  }
 }

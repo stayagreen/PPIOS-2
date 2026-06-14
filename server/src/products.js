@@ -19,6 +19,8 @@ export function getProducts(userId) {
       JOIN product_suppliers ps ON s.id = ps.supplier_id
       WHERE ps.product_id = ?
     `).all(product.id);
+    product.main_images = product.main_images ? JSON.parse(product.main_images) : [];
+    product.detail_images = product.detail_images ? JSON.parse(product.detail_images) : [];
   }
   return products;
 }
@@ -42,6 +44,8 @@ export function getProduct(id) {
       JOIN product_suppliers ps ON s.id = ps.supplier_id
       WHERE ps.product_id = ?
     `).all(product.id);
+    product.main_images = product.main_images ? JSON.parse(product.main_images) : [];
+    product.detail_images = product.detail_images ? JSON.parse(product.detail_images) : [];
   }
   return product;
 }
@@ -64,9 +68,16 @@ export function createProduct(data, userId) {
 
   const transaction = db.transaction((productData, skus, suppliers) => {
     const productStmt = db.prepare(`
-      INSERT INTO products (created_by, model, catalog_path, material) VALUES (?, ?, ?, ?)
+      INSERT INTO products (created_by, model, catalog_path, material, main_images, detail_images) VALUES (?, ?, ?, ?, ?, ?)
     `);
-    const result = productStmt.run(userId, productData.model, productData.catalog_path || null, productData.material || null);
+    const result = productStmt.run(
+      userId, 
+      productData.model, 
+      productData.catalog_path || null, 
+      productData.material || null,
+      productData.main_images ? JSON.stringify(productData.main_images) : '[]',
+      productData.detail_images ? JSON.stringify(productData.detail_images) : '[]'
+    );
     const productId = result.lastInsertRowid;
 
     if (suppliers && suppliers.length > 0) {
@@ -139,6 +150,14 @@ export function updateProduct(id, data, userId, role) {
     if (productData.hasOwnProperty('material')) {
       updateFields.push("material = ?");
       params.push(productData.material || null);
+    }
+    if (productData.hasOwnProperty('main_images')) {
+      updateFields.push("main_images = ?");
+      params.push(JSON.stringify(productData.main_images || []));
+    }
+    if (productData.hasOwnProperty('detail_images')) {
+      updateFields.push("detail_images = ?");
+      params.push(JSON.stringify(productData.detail_images || []));
     }
     
     if (updateFields.length > 0) {
