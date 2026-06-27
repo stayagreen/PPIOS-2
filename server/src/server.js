@@ -11,6 +11,7 @@ import * as products from "./products.js";
 import * as settings from "./settings.js";
 import * as suppliers from "./suppliers.js";
 import { exportProducts } from "./export.js";
+import { streamProductMaterials } from "./materials.js";
 import bcrypt from "bcryptjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -100,6 +101,18 @@ app.get("/api/export", authMiddleware, async (req, res) => {
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", "attachment; filename=products.xlsx");
   res.send(buffer);
+});
+
+app.get("/api/products/:id/materials", authMiddleware, async (req, res) => {
+  try {
+    await streamProductMaterials(req.params.id, res);
+  } catch (e) {
+    if (!res.headersSent) {
+      res.status(500).json({ error: e.message });
+    } else {
+      res.destroy(e);
+    }
+  }
 });
 
 app.post("/api/upload", authMiddleware, upload.single("image"), (req, res) => {

@@ -68,6 +68,55 @@ export async function exportExcel(ids?: number[]) {
   URL.revokeObjectURL(url);
 }
 
+function getDownloadFileName(response: Response, fallback: string) {
+  const disposition = response.headers.get('content-disposition');
+  const utf8Match = disposition?.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+
+  const asciiMatch = disposition?.match(/filename="?([^"]+)"?/i);
+  return asciiMatch?.[1] || fallback;
+}
+
+export async function downloadProductMaterials(product: { id: number; model?: string }) {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_BASE}/products/${product.id}/materials`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.reload();
+      return;
+    }
+
+    let errorMsg = '下载素材失败';
+    try {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.indexOf('application/json') !== -1) {
+        const errData = await response.json();
+        errorMsg = errData.error || errorMsg;
+      } else {
+        errorMsg = await response.text();
+      }
+    } catch (e) {
+      console.error('Error parsing material download response:', e);
+    }
+    throw new Error(errorMsg);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = getDownloadFileName(response, `${product.model || 'product'}-素材.zip`);
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export async function uploadImage(file: File, onProgress?: (progress: number) => void) {
   return new Promise<string>((resolve, reject) => {
     const xhr = new XMLHttpRequest();

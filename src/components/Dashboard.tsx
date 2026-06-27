@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Package2, Search, Plus, Download, Settings, LogOut, Image as ImageIcon, X, FolderOpen, Eye, FileText, Users, Info, Upload, ChevronDown, FileSpreadsheet, Folder } from 'lucide-react';
-import { fetchApi, exportExcel } from '../lib/api';
+import { fetchApi, exportExcel, downloadProductMaterials } from '../lib/api';
 import SettingsModal from './SettingsModal';
 import SupplierManagement from './SupplierManagement';
 import ImportExcelModal from './ImportExcelModal';
@@ -117,6 +117,14 @@ export default function Dashboard({ user, onLogout, onNavigate }: DashboardProps
       }
     } catch (e) {
       copyPath();
+    }
+  };
+
+  const handleDownloadMaterials = async (product: any) => {
+    try {
+      await downloadProductMaterials(product);
+    } catch (err: any) {
+      showNotification(err.message || '下载素材失败', 'error');
     }
   };
 
@@ -419,6 +427,7 @@ export default function Dashboard({ user, onLogout, onNavigate }: DashboardProps
                             ) : (
                               <>
                                 <button onClick={() => onNavigate({ type: 'product-detail', productId: p.id })} className="text-slate-600 hover:text-slate-900">查看</button>
+                                <button onClick={() => handleDownloadMaterials(p)} className="text-emerald-600 hover:text-emerald-900">下载素材</button>
                                 <button onClick={() => onNavigate({ type: 'product-edit', productId: p.id })} className="text-blue-600 hover:text-blue-900">编辑</button>
                                 {(user.role === 'admin' || user.id === p.created_by) && (
                                   <button onClick={() => setDeleteConfirmId(p.id)} className="text-red-600 hover:text-red-900">删除</button>
@@ -491,6 +500,7 @@ export default function Dashboard({ user, onLogout, onNavigate }: DashboardProps
                     ) : (
                       <>
                         <button onClick={() => onNavigate({ type: 'product-detail', productId: p.id })} className="p-2 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">查看</button>
+                        <button onClick={() => handleDownloadMaterials(p)} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors">下载素材</button>
                         <button onClick={() => onNavigate({ type: 'product-edit', productId: p.id })} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">编辑</button>
                         {(user.role === 'admin' || user.id === p.created_by) && (
                           <button onClick={() => setDeleteConfirmId(p.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">删除</button>
